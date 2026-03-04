@@ -1,17 +1,25 @@
 <?php
 /**
  * Plugin Name: BSBT – Owner Dashboard (Total 3D Aligned)
- * Version: 18.0.3
+ * Version: 18.0.7
+ * RU: Дашборд владельца (Обновлены ссылки на новые английские URL).
+ * EN: Owner dashboard (Updated links to new English URLs).
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 final class BSBT_Aligned_3D_Dashboard {
 
+    /* ==========================================================================
+     * CONSTRUCTOR / КОНСТРУКТОР
+     * ========================================================================== */
     public function __construct() {
         add_shortcode( 'bsbt_owner_dashboard', [ $this, 'render' ] );
     }
 
+    /* ==========================================================================
+     * RENDER / ВЫВОД ДАШБОРДА
+     * ========================================================================== */
     public function render() {
 
         if ( ! is_user_logged_in() ) {
@@ -23,6 +31,15 @@ final class BSBT_Aligned_3D_Dashboard {
         $user = wp_get_current_user();
         $navy = '#082567'; 
         $gold = '#E0B849'; 
+        
+        // RU: Подсчет квартир текущего юзера (любого статуса)
+        $apts = get_posts([
+            'post_type'      => 'mphb_room_type',
+            'author'         => $user->ID,
+            'posts_per_page' => 1,
+            'post_status'    => 'any'
+        ]);
+        $apartments_count = count($apts);
         
         ob_start(); ?>
 
@@ -66,125 +83,30 @@ final class BSBT_Aligned_3D_Dashboard {
             .bsbt-viewport { padding-top: 18vh; padding-bottom: 40px; background: #ffffff; width: 100%; box-sizing: border-box; overflow-x: hidden; }
             #bsbt-container { font-family: 'Segoe UI', Roboto, sans-serif; max-width: 1150px; margin: 0 auto; padding: 0 25px; box-sizing: border-box; }
 
-            .bsbt-header-row {
-                display: flex !important;
-                justify-content: space-between !important;
-                align-items: center !important;
-                margin-bottom: 15px !important;
-            }
-
+            .bsbt-header-row { display: flex !important; justify-content: space-between !important; align-items: center !important; margin-bottom: 15px !important; }
             .bsbt-title { font-size: 32px; font-weight: 800; margin: 0; color: <?php echo $navy; ?>; }
 
-            .bsbt-lang-box {
-                border: 1px solid #f1f5f9;
-                padding: 5px 15px;
-                border-radius: 20px;
-                font-size: 11px;
-                color: #94a3b8;
-                font-weight: 600;
-                background: #fff;
-            }
+            .bsbt-lang-box { border: 1px solid #f1f5f9; padding: 5px 15px; border-radius: 20px; font-size: 11px; color: #94a3b8; font-weight: 600; background: #fff; }
+            .bsbt-header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+            .bsbt-partner-tag { background: <?php echo $navy; ?>; color: #fff; padding: 7px 15px; border-radius: 8px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
 
-            .bsbt-header-right {
-                display: flex;
-                flex-direction: column;
-                align-items: flex-end;
-                gap: 8px;
-            }
+            .bsbt-grid { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 20px !important; margin: 30px 0 !important; }
 
-            .bsbt-partner-tag {
-                background: <?php echo $navy; ?>;
-                color: #fff;
-                padding: 7px 15px;
-                border-radius: 8px;
-                font-size: 10px;
-                font-weight: 800;
-                text-transform: uppercase;
-                letter-spacing: 1px;
-            }
+            .bsbt-glass-card { background: #ffffff !important; border: 1px solid #f1f5f9 !important; border-radius: 24px !important; padding: 30px 15px !important; text-align: center !important; text-decoration: none !important; transition: 0.4s !important; display: flex !important; flex-direction: column !important; align-items: center !important; box-shadow: 0 4px 20px rgba(0,0,0,0.03) !important; }
+            .bsbt-glass-card:hover { transform: translateY(-8px) !important; border-color: <?php echo $gold; ?> !important; box-shadow: 0 20px 40px rgba(8, 37, 103, 0.1) !important; }
 
-            .bsbt-grid {
-                display: grid !important;
-                grid-template-columns: repeat(3, 1fr) !important;
-                gap: 20px !important;
-                margin: 30px 0 !important;
-            }
+            .sf-empty-tile-pulse { box-shadow: 0 0 15px rgba(224, 184, 73, 0.8) !important; animation: pulse-gold 2s infinite; border: 2px solid #E0B849 !important; }
+            @keyframes pulse-gold { 0% { box-shadow: 0 0 0 0 rgba(224, 184, 73, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(224, 184, 73, 0); } 100% { box-shadow: 0 0 0 0 rgba(224, 184, 73, 0); } }
 
-            .bsbt-glass-card {
-                background: #ffffff !important;
-                border: 1px solid #f1f5f9 !important;
-                border-radius: 24px !important;
-                padding: 30px 15px !important;
-                text-align: center !important;
-                text-decoration: none !important;
-                transition: 0.4s !important;
-                display: flex !important;
-                flex-direction: column !important;
-                align-items: center !important;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.03) !important;
-            }
+            .bsbt-bubble-icon { width: 70px; height: 70px; background: radial-gradient(circle at 30% 30%, #ffffff 0%, #f1f5f9 100%); border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 32px; margin-bottom: 15px; }
 
-            .bsbt-glass-card:hover {
-                transform: translateY(-8px) !important;
-                border-color: <?php echo $gold; ?> !important;
-                box-shadow: 0 20px 40px rgba(8, 37, 103, 0.1) !important;
-            }
-
-            .bsbt-bubble-icon {
-                width: 70px;
-                height: 70px;
-                background: radial-gradient(circle at 30% 30%, #ffffff 0%, #f1f5f9 100%);
-                border-radius: 20px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 32px;
-                margin-bottom: 15px;
-            }
-
-            .bsbt-footer {
-                background: #f8fafc !important;
-                border-radius: 24px !important;
-                padding: 25px 35px !important;
-                display: flex !important;
-                justify-content: space-between !important;
-                align-items: center !important;
-                border: 1px solid #e2e8f0 !important;
-                margin-top: 30px;
-            }
-
-            /* =========================
-               MOBILE FIX (2 CARDS PER ROW)
-               ========================= */
             @media (max-width: 767px) {
-
-                .bsbt-header-row {
-                    flex-direction: column !important;
-                    align-items: flex-start !important;
-                    gap: 15px !important;
-                }
-
-                .bsbt-header-right {
-                    align-items: flex-start !important;
-                    width: 100%;
-                }
-
-                .bsbt-grid {
-                    grid-template-columns: repeat(2, 1fr) !important;
-                    gap: 15px !important;
-                }
-
-                .bsbt-glass-card {
-                    padding: 25px 10px !important;
-                }
-
-                .bsbt-bubble-icon {
-                    width: 60px;
-                    height: 60px;
-                    font-size: 26px;
-                }
+                .bsbt-header-row { flex-direction: column !important; align-items: flex-start !important; gap: 15px !important; }
+                .bsbt-header-right { align-items: flex-start !important; width: 100%; }
+                .bsbt-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 15px !important; }
+                .bsbt-glass-card { padding: 25px 10px !important; }
+                .bsbt-bubble-icon { width: 60px; height: 60px; font-size: 26px; }
             }
-
         </style>
 
         <div class="bsbt-viewport">
@@ -199,6 +121,16 @@ final class BSBT_Aligned_3D_Dashboard {
                     </div>
                 </div>
 
+                <?php if (isset($_GET['apt_created']) && $_GET['apt_created'] == '1'): ?>
+                    <div style="background: #fdf8ed; color: #082567; padding: 15px 20px; border-radius: 12px; margin-bottom: 25px; border: 2px solid #E0B849; display: flex; align-items: center; gap: 15px; box-shadow: 0 4px 15px rgba(224, 184, 73, 0.15);">
+                        <div style="font-size: 24px;">🎉</div>
+                        <div>
+                            <strong style="display: block; font-size: 16px;">Wunderbar!</strong>
+                            <span style="font-size: 14px; color: #334155;">Ihr Apartment wurde erfolgreich eingereicht und befindet sich nun in der Prüfung.</span>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
                 <p style="font-size: 15px; color: #64748b; margin: 0 0 30px 0;">
                     Willkommen zurück, 
                     <span style="font-weight: 700; color: <?php echo $navy; ?>;">
@@ -210,17 +142,41 @@ final class BSBT_Aligned_3D_Dashboard {
                     <?php
                     $items = [
                         ['Meine Buchungen', '📅', '/owner-bookings/'],
-                        ['Apartments', '🏢', '#'],
+                        ['Apartments', '🏢', '#'], 
                         ['Finanzen', '💳', '/owner-dashboard-finanzen/'],
                         ['Kalender', '🗓️', '#'],
                         ['Mein Profil', '👤', '#'],
                         ['Support', '🎧', '#']
                     ];
-                    foreach ($items as $item) : ?>
-                        <a href="<?php echo $item[2]; ?>" class="bsbt-glass-card">
+                    
+                    foreach ($items as $item) : 
+                        $link = $item[2];
+                        $class = 'bsbt-glass-card';
+                        $action_text = 'Öffnen';
+
+                        // RU: Логика маршрутизации для плитки Apartments.
+                        // Если 0 квартир -> /add-apartment/
+                        // Если есть -> /owner-apartments/ (твой список)
+                        if ($item[0] === 'Apartments') {
+                            if ($apartments_count === 0) {
+                                $link = home_url('/add-apartment/');
+                                $class = 'bsbt-glass-card sf-empty-tile-pulse';
+                                $action_text = 'Erstes hinzufügen';
+                            } else {
+                                $link = home_url('/owner-apartments/'); // Твой новый slug
+                                $class = 'bsbt-glass-card';
+                                $action_text = 'Öffnen / Neu';
+                            }
+                        }
+                    ?>
+                        <a href="<?php echo esc_url($link); ?>" class="<?php echo esc_attr($class); ?>">
                             <div class="bsbt-bubble-icon"><?php echo $item[1]; ?></div>
                             <h4 style="margin:0 0 5px 0; font-size: 18px; color: <?php echo $navy; ?>;"><?php echo $item[0]; ?></h4>
-                            <span style="font-size: 10px; color: #cbd5e1; font-weight: 700; text-transform: uppercase;">Öffnen</span>
+                            <span style="font-size: 10px; color: #cbd5e1; font-weight: 700; text-transform: uppercase;"><?php echo $action_text; ?></span>
+                            
+                            <?php if ($item[0] === 'Apartments' && $apartments_count === 0): ?>
+                                <div style="font-size: 11px; color: <?php echo $gold; ?>; margin-top: 8px; font-weight: bold; text-transform: uppercase;">Aktion erforderlich</div>
+                            <?php endif; ?>
                         </a>
                     <?php endforeach; ?>
                 </div>
