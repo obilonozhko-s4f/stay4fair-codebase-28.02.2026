@@ -7,6 +7,11 @@ namespace StayFlow\Admin;
 use StayFlow\Registry\ModuleRegistry;
 use StayFlow\Settings\SettingsStore;
 
+/**
+ * Version: 1.4.0
+ * RU: Управление меню и страницами админки.
+ * - [NEW]: Добавлено поле `platform_vat_rate_a` для управления НДС Модели А.
+ */
 final class Menu
 {
     public function register(): void
@@ -141,7 +146,7 @@ final class Menu
     public function renderSettings(): void
     {
         // RU: Глубокое слияние (Deep Merge). 
-        // Это гарантирует, что если поле пустое в БД, подтянется дефолтный текст из SettingsStore!
+        // Гарантирует подтягивание дефолтных текстов, даже если база была пустой.
         $defaults = SettingsStore::defaults();
         $saved = get_option(SettingsStore::OPTION_KEY, []);
         $options = array_replace_recursive($defaults, is_array($saved) ? $saved : []);
@@ -167,27 +172,34 @@ final class Menu
                             <tr>
                                 <th scope="row"><label>Plattform-Land (ISO)</label></th>
                                 <td>
-                                    <input type="text" name="<?php echo $optKey; ?>[platform_country]" value="<?php echo esc_attr($options['platform_country']); ?>" class="regular-text" style="width: 80px;">
+                                    <input type="text" name="<?php echo $optKey; ?>[platform_country]" value="<?php echo esc_attr((string)($options['platform_country'] ?? 'DE')); ?>" class="regular-text" style="width: 80px;">
                                 </td>
                             </tr>
                             <tr>
                                 <th scope="row"><label>Basiswährung</label></th>
                                 <td>
-                                    <input type="text" name="<?php echo $optKey; ?>[base_currency]" value="<?php echo esc_attr($options['base_currency']); ?>" class="regular-text" style="width: 80px;">
+                                    <input type="text" name="<?php echo $optKey; ?>[base_currency]" value="<?php echo esc_attr((string)($options['base_currency'] ?? 'EUR')); ?>" class="regular-text" style="width: 80px;">
                                 </td>
                             </tr>
                             <tr>
-                                <th scope="row"><label>Standard Provision</label></th>
+                                <th scope="row"><label>Standard Provision (%)</label></th>
                                 <td>
-                                    <input type="number" step="0.01" name="<?php echo $optKey; ?>[commission_default]" value="<?php echo esc_attr($options['commission_default']); ?>" class="regular-text" style="width: 100px;">
-                                    <p class="description">Als Dezimalwert (z.B. 0.15 für 15%). <em>(Wird in Kürze mit dem Snapshot-System verknüpft)</em></p>
+                                    <input type="number" step="0.1" name="<?php echo $optKey; ?>[commission_default]" value="<?php echo esc_attr((string)($options['commission_default'] ?? 15.0)); ?>" class="regular-text" style="width: 100px;">
+                                    <p class="description">Als Prozentwert (z.B. <strong>15</strong> für 15%).</p>
                                 </td>
                             </tr>
                             <tr>
-                                <th scope="row"><label>Plattform MwSt-Satz (%)</label></th>
+                                <th scope="row"><label>MwSt-Satz Modell B (%)</label></th>
                                 <td>
-                                    <input type="number" step="0.1" name="<?php echo $optKey; ?>[platform_vat_rate]" value="<?php echo esc_attr($options['platform_vat_rate']); ?>" class="regular-text" style="width: 100px;">
-                                    <p class="description">Wird auf die Provision angewendet (z.B. 19.0).</p>
+                                    <input type="number" step="0.1" name="<?php echo $optKey; ?>[platform_vat_rate]" value="<?php echo esc_attr((string)($options['platform_vat_rate'] ?? 19.0)); ?>" class="regular-text" style="width: 100px;">
+                                    <p class="description">Wird auf die Vermittlungsprovision angewendet (Standard: 19.0).</p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><label>MwSt-Satz Modell A (%)</label></th>
+                                <td>
+                                    <input type="number" step="0.1" name="<?php echo $optKey; ?>[platform_vat_rate_a]" value="<?php echo esc_attr((string)($options['platform_vat_rate_a'] ?? 7.0)); ?>" class="regular-text" style="width: 100px;">
+                                    <p class="description">Reduzierter Satz für Übernachtungen (Standard: 7.0).</p>
                                 </td>
                             </tr>
                         </table>
@@ -201,13 +213,13 @@ final class Menu
                             <tr>
                                 <th scope="row"><label>Betreff (E-Mail)</label></th>
                                 <td>
-                                    <input type="text" name="<?php echo $optKey; ?>[onboarding][verify_email_sub]" value="<?php echo esc_attr($options['onboarding']['verify_email_sub']); ?>" class="large-text">
+                                    <input type="text" name="<?php echo $optKey; ?>[onboarding][verify_email_sub]" value="<?php echo esc_attr((string)($options['onboarding']['verify_email_sub'] ?? '')); ?>" class="large-text">
                                 </td>
                             </tr>
                             <tr>
                                 <th scope="row"><label>Nachricht (E-Mail)</label></th>
                                 <td>
-                                    <textarea name="<?php echo $optKey; ?>[onboarding][verify_email_body]" rows="6" class="large-text"><?php echo esc_textarea($options['onboarding']['verify_email_body']); ?></textarea>
+                                    <textarea name="<?php echo $optKey; ?>[onboarding][verify_email_body]" rows="6" class="large-text"><?php echo esc_textarea((string)($options['onboarding']['verify_email_body'] ?? '')); ?></textarea>
                                     <p class="description">Verfügbare Variablen: <code>{name}</code>, <code>{verify_link}</code></p>
                                 </td>
                             </tr>
@@ -218,13 +230,13 @@ final class Menu
                             <tr>
                                 <th scope="row"><label>Titel</label></th>
                                 <td>
-                                    <input type="text" name="<?php echo $optKey; ?>[onboarding][success_page_title]" value="<?php echo esc_attr($options['onboarding']['success_page_title']); ?>" class="large-text">
+                                    <input type="text" name="<?php echo $optKey; ?>[onboarding][success_page_title]" value="<?php echo esc_attr((string)($options['onboarding']['success_page_title'] ?? '')); ?>" class="large-text">
                                 </td>
                             </tr>
                             <tr>
                                 <th scope="row"><label>Text</label></th>
                                 <td>
-                                    <textarea name="<?php echo $optKey; ?>[onboarding][success_page_text]" rows="4" class="large-text"><?php echo esc_textarea($options['onboarding']['success_page_text']); ?></textarea>
+                                    <textarea name="<?php echo $optKey; ?>[onboarding][success_page_text]" rows="4" class="large-text"><?php echo esc_textarea((string)($options['onboarding']['success_page_text'] ?? '')); ?></textarea>
                                 </td>
                             </tr>
                         </table>
@@ -245,7 +257,7 @@ final class Menu
             .sf-hint { color: #64748b; font-size: 13px; margin: 0 0 20px 0; }
             .form-table th { font-weight: 600; color: #1e293b; padding-left: 0; }
             .form-table td { padding-left: 0; }
-            .regular-text, .large-text { border-radius: 6px; border: 1px solid #cbd5e1; padding: 6px 10px; }
+            .regular-text, .large-text { border-radius: 6px; border: 1px solid #cbd5e1; padding: 6px 10px; width: 100%; box-sizing: border-box; }
             .regular-text:focus, .large-text:focus { border-color: #082567; box-shadow: 0 0 0 1px #082567; }
         </style>
         <?php
