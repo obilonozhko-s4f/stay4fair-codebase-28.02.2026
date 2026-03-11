@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name: BSBT – Accommodation List Shortcode (Search + Availability + Filters)
- * Description: [bsbt_accommodation_list] – карточки mphb_room_type в стиле BSBT. Режимы: featured, catalog, search (учёт дат, доступности, города, дистанции и Apartment Type).
+ * Plugin Name: BSBT – Accommodation List Shortcode (Search + Availability + Filters + Reg. ID)
+ * Description: [bsbt_accommodation_list] – карточки mphb_room_type. [bsbt_apartment_reg_id] - шорткод для одиночной страницы.
  * Author: BS Business Travelling
- * Version: 5.6.3
+ * Version: 5.7.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -40,7 +40,7 @@ function bsbt_parse_date( $raw ) {
 }
 
 /**
- * Полный адрес из ACF (field_68fccddecdffd)
+ * Полный адрес из ACF
  */
 function bsbt_get_address( $post_id ) {
 	if ( function_exists( 'get_field' ) ) {
@@ -57,7 +57,6 @@ function bsbt_get_address( $post_id ) {
  */
 function bsbt_get_city_from_address( $address ) {
 	if ( ! $address ) return '';
-
 	$address = trim( $address );
 
 	if ( preg_match( '~\b(\d{5})\s+([^\d,]+)$~u', $address, $m ) ) {
@@ -66,9 +65,7 @@ function bsbt_get_city_from_address( $address ) {
 
 	$parts = explode( ',', $address );
 	$last  = trim( end( $parts ) );
-	if ( $last ) {
-		return $last;
-	}
+	if ( $last ) return $last;
 
 	$words = preg_split( '/\s+/', $address );
 	return trim( end( $words ) );
@@ -88,16 +85,13 @@ function bsbt_normalize_city( $city ) {
  */
 function bsbt_get_distance_km( $post_id ) {
 	$distance = null;
-
 	if ( function_exists( 'get_field' ) ) {
 		$distance = get_field( 'bsbt_distance', $post_id );
 	} else {
 		$distance = get_post_meta( $post_id, 'bsbt_distance', true );
 	}
 
-	if ( $distance === '' || $distance === null ) {
-		return null;
-	}
+	if ( $distance === '' || $distance === null ) return null;
 
 	$distance = str_replace( ',', '.', (string) $distance );
 	$val      = floatval( $distance );
@@ -107,28 +101,19 @@ function bsbt_get_distance_km( $post_id ) {
 
 /**
  * МИНИМАЛЬНАЯ ЦЕНА ЗА НОЧЬ
- * Интеграция с Core Pricing Engine (Model A/B)
  */
 function bsbt_get_min_price_raw( $room_type_id ) {
-	
-	// 1. Проверяем бизнес-модель
 	$model = get_post_meta( $room_type_id, '_bsbt_business_model', true );
 
-	// 2. Если Модель Б — считаем через ядро
 	if ( $model === 'model_b' && function_exists( 'bsbt_calculate_model_b_price' ) ) {
 		$owner_price = (float) get_post_meta( $room_type_id, 'owner_price_per_night', true );
-		if ( $owner_price > 0 ) {
-			return bsbt_calculate_model_b_price( $owner_price );
-		}
+		if ( $owner_price > 0 ) return bsbt_calculate_model_b_price( $owner_price );
 	}
 
-	// 3. Fallback: Стандартная логика MotoPress
 	if ( ! function_exists( 'mphb_prices_facade' ) ) return false;
 
 	$facade = mphb_prices_facade();
-	if ( ! is_object( $facade ) || ! method_exists( $facade, 'getActiveRatesByRoomTypeId' ) ) {
-		return false;
-	}
+	if ( ! is_object( $facade ) || ! method_exists( $facade, 'getActiveRatesByRoomTypeId' ) ) return false;
 
 	$today = new DateTime( current_time( 'Y-m-d' ) );
 	$rates = $facade->getActiveRatesByRoomTypeId( $room_type_id );
@@ -136,19 +121,14 @@ function bsbt_get_min_price_raw( $room_type_id ) {
 
 	$min = false;
 	foreach ( $rates as $rate ) {
-		if ( method_exists( $rate, 'isExistsFrom' ) && ! $rate->isExistsFrom( $today ) ) {
-			continue;
-		}
+		if ( method_exists( $rate, 'isExistsFrom' ) && ! $rate->isExistsFrom( $today ) ) continue;
 		if ( method_exists( $rate, 'getMinBasePrice' ) ) {
 			$p = $rate->getMinBasePrice( $today );
 			if ( is_numeric( $p ) ) {
-				if ( $min === false || $p < $min ) {
-					$min = $p;
-				}
+				if ( $min === false || $p < $min ) $min = $p;
 			}
 		}
 	}
-
 	return $min === false ? false : (float) $min;
 }
 
@@ -157,20 +137,35 @@ function bsbt_get_min_price_raw( $room_type_id ) {
  */
 function bsbt_get_room_capacity( $post_id ) {
 	$capacity_raw = get_post_meta( $post_id, 'mphb_total_capacity', true );
-
 	if ( $capacity_raw === '' || $capacity_raw === null ) {
 		$capacity_raw = get_post_meta( $post_id, 'mphb_adults_capacity', true );
 	}
-
-	if ( ! is_numeric( $capacity_raw ) ) {
-		return 0;
-	}
-
+	if ( ! is_numeric( $capacity_raw ) ) return 0;
 	return max( 0, intval( $capacity_raw ) );
 }
 
 /* ==========================================================================
- * 3) Шорткод: [bsbt_accommodation_list]
+ * 2) Шорткод для одиночной страницы квартиры (Single Page)
+ * ========================================================================== */
+
+add_shortcode('bsbt_apartment_reg_id', 'bsbt_render_single_apartment_reg_id');
+
+function bsbt_render_single_apartment_reg_id() {
+    $post_id = get_the_ID();
+    if (!$post_id) return '';
+
+    // RU: Вытягиваем регистрационный номер
+    $reg_id = get_post_meta($post_id, '_sf_commune_reg_id', true);
+    
+    if (empty($reg_id)) return '';
+
+    return '<div class="bsbt-reg-id-display" style="font-size: 13px; color: #64748b; padding: 5px 0;">
+                <strong>Reg.-Nr.:</strong> ' . esc_html($reg_id) . '
+            </div>';
+}
+
+/* ==========================================================================
+ * 3) Шорткод списка: [bsbt_accommodation_list]
  * ========================================================================== */
 
 add_shortcode( 'bsbt_accommodation_list', 'bsbt_render_accommodation_list' );
@@ -204,7 +199,7 @@ function bsbt_render_accommodation_list( $atts ) {
 	$search    = ( $mode === 'search' );
 
 	$adults           = isset( $_GET['mphb_adults'] )   ? intval( $_GET['mphb_adults'] )   : 0;
-	$children          = isset( $_GET['mphb_children'] ) ? intval( $_GET['mphb_children'] ) : 0;
+	$children         = isset( $_GET['mphb_children'] ) ? intval( $_GET['mphb_children'] ) : 0;
 	$guests_requested = max( 0, $adults + $children );
 
 	if ( $search ) {
@@ -221,7 +216,6 @@ function bsbt_render_accommodation_list( $atts ) {
 		: 1;
 
 	if ( ! $search ) {
-
 		$query_args = array(
 			'post_type'   => 'mphb_room_type',
 			'post_status' => 'publish',
@@ -238,9 +232,7 @@ function bsbt_render_accommodation_list( $atts ) {
 		}
 
 		$q = new WP_Query( $query_args );
-		if ( ! $q->have_posts() ) {
-			return '';
-		}
+		if ( ! $q->have_posts() ) return '';
 
 		$html  = bsbt_acc_list_styles();
 		$html .= '<div class="bsbt-acc-list">';
@@ -265,15 +257,11 @@ function bsbt_render_accommodation_list( $atts ) {
 	$filter_apt_name = '';
 	if ( isset( $_GET['mphb_attributes']['apartment-type'] ) ) {
 		$apt_param = wp_unslash( $_GET['mphb_attributes']['apartment-type'] );
-		if ( is_array( $apt_param ) ) {
-			$apt_param = reset( $apt_param );
-		}
+		if ( is_array( $apt_param ) ) $apt_param = reset( $apt_param );
 		$apt_param = trim( (string) $apt_param );
+		
 		if ( $apt_param !== '' ) {
-			$attr_tax = function_exists( 'mphb_attribute_taxonomy_name' )
-				? mphb_attribute_taxonomy_name( 'apartment-type' )
-				: 'mphb_apartment-type';
-
+			$attr_tax = function_exists( 'mphb_attribute_taxonomy_name' ) ? mphb_attribute_taxonomy_name( 'apartment-type' ) : 'mphb_apartment-type';
 			$term = is_numeric( $apt_param ) ? get_term( (int) $apt_param, $attr_tax ) : get_term_by( 'slug', $apt_param, $attr_tax );
 
 			if ( $term && ! is_wp_error( $term ) ) {
@@ -392,8 +380,9 @@ function bsbt_acc_list_styles() {
 	.bsbt-acc-image-wrap{ flex:0 0 20%; max-width:20%; height:100%; }
 	.bsbt-acc-image-wrap img{ width:100%; height:100%; object-fit:cover; border-radius:10px; display:block; }
 	.bsbt-acc-content{ flex:1; display:flex; flex-direction:column; justify-content:space-between; }
-	.bsbt-acc-title{ margin:0 0 8px; font-size:20px; font-weight:600; line-height:1.3; }
+	.bsbt-acc-title{ margin:0 0 4px; font-size:20px; font-weight:600; line-height:1.3; }
 	.bsbt-acc-title a{ color:#082567; text-decoration:none; }
+    .bsbt-acc-reg-id{ font-size:11px; color:#94a3b8; margin-bottom:10px; font-weight:500; }
 	.bsbt-acc-excerpt{ font-size:14px; color:#333; line-height:1.45; max-height:85px; overflow:hidden; margin-bottom:14px; }
 	.bsbt-acc-bottom{ margin-top:auto; display:flex; align-items:flex-end; justify-content:space-between; gap:20px; }
 	.bsbt-acc-price{ font-size:15px; font-weight:600; color:#082567; margin:0; }
@@ -416,6 +405,9 @@ function bsbt_build_card_data( $post_id, $check_in, $check_out, $nights, $search
 	$permalink = get_permalink( $post_id );
 	$thumb     = get_the_post_thumbnail( $post_id, 'large' );
 	$excerpt   = get_the_excerpt( $post_id ) ?: wp_trim_words( wp_strip_all_tags( get_post_field( 'post_content', $post_id ) ), 28, '…' );
+    
+    // RU: Получаем регистрационный номер
+    $reg_id    = get_post_meta( $post_id, '_sf_commune_reg_id', true );
 
 	$price_raw  = is_numeric( $price_raw_override ) ? $price_raw_override : bsbt_get_min_price_raw( $post_id );
 	$price_html = '';
@@ -436,16 +428,35 @@ function bsbt_build_card_data( $post_id, $check_in, $check_out, $nights, $search
 		$price_html = 'Price N/A';
 	}
 
-	return array( 'id' => $post_id, 'title' => $title, 'link' => $permalink, 'thumb' => $thumb, 'excerpt' => $excerpt, 'price_html' => $price_html );
+	return array( 
+        'id'         => $post_id, 
+        'title'      => $title, 
+        'link'       => $permalink, 
+        'thumb'      => $thumb, 
+        'excerpt'    => $excerpt, 
+        'price_html' => $price_html,
+        'reg_id'     => $reg_id
+    );
 }
 
 function bsbt_render_card_html( $data ) {
 	$html = '<div class="bsbt-acc-card">';
-	if ( $data['thumb'] ) $html .= '<div class="bsbt-acc-image-wrap"><a href="' . esc_url( $data['link'] ) . '">' . $data['thumb'] . '</a></div>';
+	if ( $data['thumb'] ) {
+        $html .= '<div class="bsbt-acc-image-wrap"><a href="' . esc_url( $data['link'] ) . '">' . $data['thumb'] . '</a></div>';
+    }
 	$html .= '<div class="bsbt-acc-content"><div class="bsbt-acc-top"><h3 class="bsbt-acc-title"><a href="' . esc_url( $data['link'] ) . '">' . esc_html( $data['title'] ) . '</a></h3>';
-	if ( $data['excerpt'] ) $html .= '<div class="bsbt-acc-excerpt">' . esc_html( $data['excerpt'] ) . '</div>';
+	
+    // RU: Вывод регистрационного номера под заголовком
+    if ( ! empty( $data['reg_id'] ) ) {
+        $html .= '<div class="bsbt-acc-reg-id">Reg.-Nr.: ' . esc_html( $data['reg_id'] ) . '</div>';
+    }
+
+    if ( $data['excerpt'] ) {
+        $html .= '<div class="bsbt-acc-excerpt">' . esc_html( $data['excerpt'] ) . '</div>';
+    }
 	$html .= '</div><div class="bsbt-acc-bottom"><div class="bsbt-acc-price">' . $data['price_html'] . '</div><a class="bsbt-acc-button" href="' . esc_url( $data['link'] ) . '">Check availability</a></div></div></div>';
-	return $html;
+	
+    return $html;
 }
 
 /* ==========================================================================
