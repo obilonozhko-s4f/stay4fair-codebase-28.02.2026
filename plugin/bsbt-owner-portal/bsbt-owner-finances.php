@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: BSBT – Owner Finances
- * Description: Финансовый отчет владельца на базе Snapshot. (V1.3.0 - Monthly PDF added)
- * Version: 1.3.0
+ * Description: Финансовый отчет владельца на базе Snapshot. (V1.4.0 - Monthly PDF & CSV added)
+ * Version: 1.4.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -173,6 +173,9 @@ final class BSBT_Owner_Finances {
                 background-image: linear-gradient(180deg, rgba(255,255,255,0.4) 0%, rgba(0,0,0,0.1) 100%) !important;
                 transform: translateY(-2px) !important;
             }
+            
+            .btn-csv { background-color: #10b981 !important; color: #fff !important; }
+            .btn-csv:hover { background-color: #059669 !important; color: #fff !important; }
 
             .mobile-label { display:none; font-weight:800; color:#082567; font-size:10px; text-transform:uppercase; margin-bottom:4px; opacity: 0.6; }
 
@@ -190,6 +193,8 @@ final class BSBT_Owner_Finances {
                 .cell-content { display:inline-block; max-width:65%; text-align:right; }
                 .col-pdf { text-align: center !important; padding: 15px !important; background: #fcfcfc; }
                 .bsbt-pdf-btn-v3 { display: flex; width: 100%; padding: 14px !important; font-size: 15px !important; }
+                .action-buttons { flex-direction: column; width: 100%; }
+                .action-buttons button { width: 100%; margin-bottom: 5px; }
             }
         </style>
 
@@ -197,12 +202,12 @@ final class BSBT_Owner_Finances {
             
             <div style="background: #fff; border: 1px solid #e5e5e5; border-radius: 12px; padding: 20px; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); display: flex; flex-wrap: wrap; gap: 15px; align-items: center; justify-content: space-between;">
                 <div>
-                    <h3 style="margin: 0 0 5px 0; color: #082567; font-size: 18px;">📊 Monatsabrechnung (PDF)</h3>
-                    <p style="margin: 0; font-size: 13px; color: #64748b;">Laden Sie eine detaillierte Übersicht aller Abrechnungen für einen bestimmten Monat herunter (basierend auf dem Abreisedatum).</p>
+                    <h3 style="margin: 0 0 5px 0; color: #082567; font-size: 18px;">📊 Monatsabrechnung</h3>
+                    <p style="margin: 0; font-size: 13px; color: #64748b;">Laden Sie eine detaillierte Übersicht herunter (basierend auf dem Abreisedatum).</p>
                 </div>
                 <form method="POST" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                    <input type="hidden" name="action" value="bsbt_owner_monthly_pdf">
-                    <?php wp_nonce_field('bsbt_owner_monthly_pdf', 'monthly_pdf_nonce'); ?>
+                    <input type="hidden" name="action" value="bsbt_owner_monthly_report">
+                    <?php wp_nonce_field('bsbt_owner_monthly_report', 'monthly_report_nonce'); ?>
                     
                     <select name="f_month" style="padding: 10px 15px; border-radius: 8px; border: 1px solid #cbd5e1; outline: none; font-weight: 600; color: #082567; background: #f8fafc; font-size: 14px;">
                         <?php
@@ -228,9 +233,13 @@ final class BSBT_Owner_Finances {
                         ?>
                     </select>
                     
-                    <button type="submit" class="bsbt-pdf-btn-v3" style="border: none;">📥 Download PDF</button>
+                    <div class="action-buttons" style="display:flex; gap:10px;">
+                        <button type="submit" name="format" value="pdf" class="bsbt-pdf-btn-v3">📄 PDF</button>
+                        <button type="submit" name="format" value="csv" class="bsbt-pdf-btn-v3 btn-csv">📊 CSV (Excel)</button>
+                    </div>
                 </form>
             </div>
+
             <?php if (count($available_years) > 1): ?>
             <div class="bsbt-year-tabs">
                 <?php foreach ($available_years as $y):
