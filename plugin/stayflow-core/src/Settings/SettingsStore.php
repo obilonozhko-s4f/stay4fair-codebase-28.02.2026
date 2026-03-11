@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace StayFlow\Settings;
 
 /**
- * Version: 1.3.0
+ * Version: 1.4.0
  * RU: Хранилище настроек.
- * - [NEW]: Добавлены глобальные шорткоды [sf_commission] и [sf_vat] для фронтенда (Elementor).
- * EN: Settings storage with frontend shortcodes for dynamic rates.
+ * - [NEW]: Добавлена настройка `platform_vat_rate_a` (НДС для Модели А).
  */
 final class SettingsStore
 {
@@ -19,7 +18,8 @@ final class SettingsStore
         return [
             'platform_country'    => 'DE',
             'base_currency'       => 'EUR',
-            'platform_vat_rate'   => 19.0,
+            'platform_vat_rate'   => 19.0, // Для Модели B (Комиссия)
+            'platform_vat_rate_a' => 7.0,  // Для Модели A (Прямая продажа)
             'commission_default'  => 0.15, // 15%
             'commission_min'      => 5.0,
             'commission_max'      => 100.0,
@@ -43,35 +43,23 @@ final class SettingsStore
             'show_in_rest'      => false,
         ]);
 
-        // RU: Регистрируем глобальные шорткоды для вывода на сайте
         add_shortcode('sf_commission', [$this, 'renderCommissionShortcode']);
         add_shortcode('sf_vat', [$this, 'renderVatShortcode']);
     }
 
-    /**
-     * RU: Шорткод [sf_commission].
-     * Можно использовать [sf_commission format="number"] чтобы вывести просто "15" без знака %.
-     */
     public function renderCommissionShortcode(array|string $atts): string
     {
         $atts = is_array($atts) ? shortcode_atts(['format' => 'percent'], $atts) : ['format' => 'percent'];
         $val = $this->get('commission_default', 0.15);
-        
         $num = (float)$val * 100;
-        
         return $atts['format'] === 'number' ? (string)$num : $num . '%';
     }
 
-    /**
-     * RU: Шорткод [sf_vat].
-     */
     public function renderVatShortcode(array|string $atts): string
     {
         $atts = is_array($atts) ? shortcode_atts(['format' => 'percent'], $atts) : ['format' => 'percent'];
         $val = $this->get('platform_vat_rate', 19.0);
-        
         $num = (float)$val;
-        
         return $atts['format'] === 'number' ? (string)$num : $num . '%';
     }
 
@@ -97,9 +85,10 @@ final class SettingsStore
             'platform_country'    => sanitize_text_field((string)($input['platform_country'] ?? 'DE')),
             'base_currency'       => strtoupper(sanitize_text_field((string)($input['base_currency'] ?? 'EUR'))),
             'platform_vat_rate'   => (float)($input['platform_vat_rate'] ?? 19.0),
+            'platform_vat_rate_a' => (float)($input['platform_vat_rate_a'] ?? 7.0),
             'commission_default'  => (float)($input['commission_default'] ?? 0.15),
             'onboarding'          => $onboarding,
-            'enabled_models'      => ['A', 'B', 'C'], // Force-keep for now
+            'enabled_models'      => ['A', 'B', 'C'],
         ];
     }
 }
