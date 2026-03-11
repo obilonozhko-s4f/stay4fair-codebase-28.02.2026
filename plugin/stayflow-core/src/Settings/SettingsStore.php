@@ -5,22 +5,30 @@ declare(strict_types=1);
 namespace StayFlow\Settings;
 
 /**
- * Version: 1.4.0
+ * Version: 1.5.0
  * RU: Хранилище настроек.
- * - [NEW]: Добавлена настройка `platform_vat_rate_a` (НДС для Модели А).
+ * - [FIX]: Шорткоды теперь регистрируются в конструкторе (работают на фронте).
+ * - [FIX]: Комиссия теперь хранится как целое число (15.0 вместо 0.15) для защиты от ошибок.
  */
 final class SettingsStore
 {
     public const OPTION_KEY = 'stayflow_core_settings';
+
+    public function __construct()
+    {
+        // RU: Регистрируем шорткоды здесь, чтобы они работали и на фронтенде сайта
+        add_shortcode('sf_commission', [$this, 'renderCommissionShortcode']);
+        add_shortcode('sf_vat', [$this, 'renderVatShortcode']);
+    }
 
     public static function defaults(): array
     {
         return [
             'platform_country'    => 'DE',
             'base_currency'       => 'EUR',
-            'platform_vat_rate'   => 19.0, // Для Модели B (Комиссия)
-            'platform_vat_rate_a' => 7.0,  // Для Модели A (Прямая продажа)
-            'commission_default'  => 0.15, // 15%
+            'platform_vat_rate'   => 19.0,
+            'platform_vat_rate_a' => 7.0,
+            'commission_default'  => 15.0, // Теперь храним как 15%, а не 0.15
             'commission_min'      => 5.0,
             'commission_max'      => 100.0,
             'reverse_charge_mode' => 'pending',
@@ -42,17 +50,18 @@ final class SettingsStore
             'default'           => self::defaults(),
             'show_in_rest'      => false,
         ]);
-
-        add_shortcode('sf_commission', [$this, 'renderCommissionShortcode']);
-        add_shortcode('sf_vat', [$this, 'renderVatShortcode']);
     }
 
     public function renderCommissionShortcode(array|string $atts): string
     {
         $atts = is_array($atts) ? shortcode_atts(['format' => 'percent'], $atts) : ['format' => 'percent'];
-        $val = $this->get('commission_default', 0.15);
-        $num = (float)$val * 100;
-        return $atts['format'] === 'number' ? (string)$num : $num . '%';
+        $val = $this->get('commission_default', 15.0);
+        
+        // Если в базе вдруг застряло 0.15 с прошлого теста, конвертируем
+        $num = (float)$val;
+        if ($num > 0.0 && $num <= 1.0) $num = $num * 100;
+        
+        return $atts['format'] === 'number' ? (string)round($num, 1) : round($num, 1) . '%';
     }
 
     public function renderVatShortcode(array|string $atts): string
@@ -60,7 +69,7 @@ final class SettingsStore
         $atts = is_array($atts) ? shortcode_atts(['format' => 'percent'], $atts) : ['format' => 'percent'];
         $val = $this->get('platform_vat_rate', 19.0);
         $num = (float)$val;
-        return $atts['format'] === 'number' ? (string)$num : $num . '%';
+        return $atts['format'] === 'number' ? (string)round($num, 1) : round($num, 1) . '%';
     }
 
     public function get(string $key, mixed $fallback = null): mixed
@@ -81,12 +90,16 @@ final class SettingsStore
             $onboarding['success_page_text']  = sanitize_textarea_field($input['onboarding']['success_page_text'] ?? '');
         }
 
+        // Страховка от ввода десятичной дроби юзером (если он ввел 0.12, сделаем 12.0)
+        $com = (float)($input['commission_default'] ?? 15.0);
+        if ($com > 0.0 && $com <= 1.0) $com = $com * 100;
+
         return [
             'platform_country'    => sanitize_text_field((string)($input['platform_country'] ?? 'DE')),
             'base_currency'       => strtoupper(sanitize_text_field((string)($input['base_currency'] ?? 'EUR'))),
             'platform_vat_rate'   => (float)($input['platform_vat_rate'] ?? 19.0),
             'platform_vat_rate_a' => (float)($input['platform_vat_rate_a'] ?? 7.0),
-            'commission_default'  => (float)($input['commission_default'] ?? 0.15),
+            'commission_default'  => $com,
             'onboarding'          => $onboarding,
             'enabled_models'      => ['A', 'B', 'C'],
         ];
