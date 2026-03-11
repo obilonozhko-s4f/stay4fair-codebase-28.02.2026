@@ -1,7 +1,7 @@
 <?php
 /**
- * RU: Адаптер для вывода политик отмены бронирования (Шорткод).
- * EN: Adapter for rendering cancellation policies (Shortcode).
+ * Version: 2.0.0
+ * RU: Адаптер для вывода политик отмены. Тексты теперь берутся из Policy Registry (Админка).
  */
 
 declare(strict_types=1);
@@ -14,27 +14,12 @@ if (!defined('ABSPATH')) {
 
 final class BsbtPolicyAdapter
 {
-    /**
-     * RU: Регистрация шорткода и стилей.
-     * EN: Register shortcode and styles.
-     */
     public function register(): void
     {
         add_shortcode('bsbt_cancellation_box', [$this, 'renderShortcode']);
         add_action('wp_head', [$this, 'injectStyles']);
     }
 
-    /* =========================================================
-       SECTION: RENDER LOGIC
-       ========================================================= */
-
-    /**
-     * RU: Рендер шорткода [bsbt_cancellation_box id="..."]
-     * EN: Render shortcode
-     *
-     * @param array|string $atts
-     * @return string
-     */
     public function renderShortcode(array|string $atts): string
     {
         $attributes = shortcode_atts(['id' => 0], is_array($atts) ? $atts : []);
@@ -48,8 +33,6 @@ final class BsbtPolicyAdapter
             return '';
         }
 
-        // RU: Читаем новые динамические поля из базы
-        // EN: Read new dynamic fields from database
         $policyType = get_post_meta($roomId, '_sf_cancellation_policy', true) ?: 'non_refundable';
         $cancelDays = (int) get_post_meta($roomId, '_sf_cancellation_days', true);
 
@@ -58,7 +41,7 @@ final class BsbtPolicyAdapter
 
         $html  = '<div class="bsbt-cancel-box ' . $boxClass . '">';
         $html .= '<h3 class="bsbt-cancel-title">Cancellation Policy</h3>';
-        $html .= '<div class="bsbt-cancel-content">' . $content . '</div>';
+        $html .= '<div class="bsbt-cancel-content">' . wp_kses_post($content) . '</div>';
         $html .= '<p class="bsbt-cancel-link-note">';
         $html .= 'Full details can be found in our <a href="' . esc_url(home_url('/cancellation-policy/')) . '" target="_blank">Cancellation Policy</a> ';
         $html .= 'and <a href="' . esc_url(home_url('/terms-and-conditions/')) . '" target="_blank">Terms &amp; Conditions</a>.';
@@ -68,60 +51,23 @@ final class BsbtPolicyAdapter
         return $html;
     }
 
-    /* =========================================================
-       SECTION: TEXT GENERATION
-       ========================================================= */
-
-    /**
-     * RU: Генерация динамического текста на основе правил.
-     * EN: Dynamic text generation based on rules.
-     */
     private function getPolicyText(string $type, int $days): string
     {
-        // RU: Если выбрана бесплатная отмена и указаны дни
+        $registry = get_option('stayflow_registry_policies', []);
+
         if ($type === 'free_cancellation' && $days > 0) {
             $penaltyDays = $days - 1;
-            $text  = '<p><strong>Standard Flexible Cancellation Policy</strong></p>';
-            $text .= '<ul>';
-            $text .= '<li>Free cancellation up to <strong>' . $days . ' days before arrival</strong>.</li>';
-            $text .= '<li>For cancellations made <strong>' . $penaltyDays . ' days or less</strong> before arrival, as well as in case of no-show, <strong>100% of the total booking amount</strong> will be charged.</li>';
-            $text .= '<li>Date changes are subject to availability and must be confirmed by Stay4Fair.</li>';
-            $text .= '</ul>';
+            // RU: Берем текст из базы или дефолтный
+            $text = $registry['free_cancellation'] ?? "<ul><li>Free cancellation up to <strong>{days} days before arrival</strong>.</li><li>Penalty from <strong>{penalty_days} days</strong>.</li></ul>";
             
+            // RU: Заменяем плейсхолдеры на реальные цифры владельца
+            $text = str_replace(['{days}', '{penalty_days}'], [(string)$days, (string)$penaltyDays], $text);
             return $text;
         }
 
-        // RU: По умолчанию - безвозвратный тариф (non_refundable)
-        $text  = '<p><strong>✨ Non-Refundable – Better Price & Premium Support</strong></p>';
-        $text .= '<p>This non-refundable option is usually offered at a more attractive price than flexible bookings.</p>';
-        
-        $text .= '<h4>🔐 1. Protected & Guaranteed Booking</h4>';
-        $text .= '<ul>';
-        $text .= '<li>Your booking price is <strong>locked and protected</strong>, even if market prices increase.</li>';
-        $text .= '<li>If the apartment becomes unavailable due to a landlord cancellation, Stay4Fair will arrange an <strong>equivalent or superior accommodation at no extra cost</strong>.</li>';
-        $text .= '<li>Priority assistance and relocation support.</li>';
-        $text .= '</ul>';
-        
-        $text .= '<h4>🔄 2. Flexible Date Adjustment</h4>';
-        $text .= '<ul>';
-        $text .= '<li>You may <strong>adjust your travel dates</strong>, subject to availability.</li>';
-        $text .= '<li>The <strong>total number of nights cannot be reduced</strong>.</li>';
-        $text .= '</ul>';
-        
-        $text .= '<p><strong>⚠️ Important:</strong><br>';
-        $text .= 'This booking <strong>cannot be cancelled or refunded</strong>. Full payment remains <strong>non-refundable</strong> after confirmation.</p>';
-
-        return $text;
+        return $registry['non_refundable'] ?? "<p><strong>Non-Refundable</strong></p>";
     }
 
-    /* =========================================================
-       SECTION: STYLES
-       ========================================================= */
-
-    /**
-     * RU: Внедрение стилей в <head>.
-     * EN: Inject styles into <head>.
-     */
     public function injectStyles(): void
     {
         ?>
