@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: BSBT – Owner PDF
- * Description: Owner booking confirmation + payout summary PDF. (V2.3.0 - Snapshot strict + CSV export)
- * Version: 2.3.0
+ * Description: Owner booking confirmation + payout summary PDF. (V2.3.1 - Exact Guests Calculation fix)
+ * Version: 2.3.1
  * Author: BS Business Travelling / Stay4Fair.com
  */
 
@@ -24,7 +24,6 @@ final class BSBT_Owner_PDF {
         add_action('admin_post_bsbt_owner_pdf_open',     [__CLASS__, 'admin_open']);
         add_action('admin_post_bsbt_owner_pdf_resend',   [__CLASS__, 'admin_resend']);
         
-        // RU: Единый роут для PDF и CSV
         add_action('admin_post_bsbt_owner_monthly_report',  [__CLASS__, 'admin_monthly_report']);
 
         add_action('mphb_booking_status_confirmed', [__CLASS__, 'on_booking_confirmed'], 20, 1);
@@ -110,14 +109,20 @@ final class BSBT_Owner_PDF {
                 $out_time = strtotime($out);
                 if ((int)date('n', $out_time) !== $month || (int)date('Y', $out_time) !== $year) continue;
 
-                // Сборка СТРОГО из Snapshot
+                $b = MPHB()->getBookingRepository()->findById($bid);
                 $room_type_id = (int) get_post_meta($bid, '_bsbt_snapshot_room_type_id', true);
-                if (!$room_type_id) { // Fallback, если вдруг снепшот не сохранил ID
-                    $b = MPHB()->getBookingRepository()->findById($bid);
-                    if ($b && !empty($b->getReservedRooms())) {
-                        $room_type_id = (int) $b->getReservedRooms()[0]->getRoomTypeId();
+                
+                // RU: ТОЧНЫЙ ПОДСЧЕТ ГОСТЕЙ ИЗ РЕПОЗИТОРИЯ MPHB
+                $guests = 0;
+                if ($b && !empty($b->getReservedRooms())) {
+                    if (!$room_type_id) { 
+                        $room_type_id = (int) $b->getReservedRooms()[0]->getRoomTypeId(); 
+                    }
+                    foreach ($b->getReservedRooms() as $r) {
+                        $guests += (int)$r->getAdults() + (int)$r->getChildren();
                     }
                 }
+                $guests = max(1, $guests); // Fallback минимум 1 гость
 
                 $model = (string) get_post_meta($bid, '_bsbt_snapshot_model', true) ?: 'model_a';
                 $gross = (float) get_post_meta($bid, '_bsbt_snapshot_guest_total', true);
@@ -125,7 +130,6 @@ final class BSBT_Owner_PDF {
                 $prov_gross = (float) get_post_meta($bid, '_bsbt_snapshot_fee_gross_total', true);
                 $prov_net = (float) get_post_meta($bid, '_bsbt_snapshot_fee_net_total', true);
                 $prov_vat = (float) get_post_meta($bid, '_bsbt_snapshot_fee_vat_total', true);
-                $guests = (int) get_post_meta($bid, 'mphb_adults', true) ?: 1;
 
                 $items[] = [
                     'booking_id' => $bid,
@@ -165,10 +169,7 @@ final class BSBT_Owner_PDF {
             header('Content-Disposition: attachment; filename="'.$filename_base.'.csv"');
             $output = fopen('php://output', 'w');
             
-            // BOM для корректного отображения в Excel
-            fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
-            
-            // Заголовки (через точку с запятой для немецкого Excel)
+            fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF)); // BOM
             fputcsv($output, ['Buchung-ID', 'Apartment', 'Adresse', 'Check-in', 'Check-out', 'Gaeste', 'Modell', 'Brutto-Gesamt', 'Provision (Brutto)', 'Provision (Netto)', 'Provision (MwSt)', 'Auszahlung (Netto)'], ';');
             
             foreach ($items as $item) {
@@ -188,7 +189,7 @@ final class BSBT_Owner_PDF {
                 ], ';');
             }
 
-            fputcsv($output, [], ';'); // Пустая строка
+            fputcsv($output, [], ';');
             fputcsv($output, ['GESAMT', '', '', '', '', '', '', 
                 number_format($total_gross, 2, ',', ''), 
                 number_format($total_prov_gross, 2, ',', ''), 
@@ -314,6 +315,13 @@ final class BSBT_Owner_PDF {
         $out = (string) get_post_meta($bid, 'mphb_check_out_date', true);
         $n = ($in && $out) ? (int) max(1, (strtotime($out) - strtotime($in)) / 86400) : 0;
 
+        // RU: ТОЧНЫЙ ПОДСЧЕТ ГОСТЕЙ ИЗ РЕПОЗИТОРИЯ MPHB
+        $guests = 0;
+        foreach ($rooms as $r) {
+            $guests += (int)$r->getAdults() + (int)$r->getChildren();
+        }
+        $guests = max(1, $guests);
+
         // Строго Снэпшот
         $model = (string) get_post_meta($bid, '_bsbt_snapshot_model', true) ?: 'model_a';
         $gross = (float) get_post_meta($bid, '_bsbt_snapshot_guest_total', true);
@@ -345,7 +353,7 @@ final class BSBT_Owner_PDF {
             'check_in'          => $in,
             'check_out'         => $out,
             'nights'            => $n,
-            'guests'            => get_post_meta($bid, 'mphb_adults', true) ?: 1,
+            'guests'            => $guests,
             'guest_name'        => trim((string)get_post_meta($bid, 'mphb_first_name', true) . ' ' . (string)get_post_meta($bid, 'mphb_last_name', true)),
             'guest_company'     => get_post_meta($bid, 'mphb_company', true),
             'guest_email'       => get_post_meta($bid, 'mphb_email', true),
