@@ -8,8 +8,8 @@ use StayFlow\Registry\ModuleRegistry;
 use StayFlow\Settings\SettingsStore;
 
 /**
- * Version: 2.1.0
- * RU: Управление меню. Добавлен wp_editor (визуальный редактор) для Policies и Content Registry.
+ * Version: 2.3.0
+ * RU: Управление меню. Раздельные редакторы налоговых уведомлений для одиночных и месячных PDF.
  */
 final class Menu
 {
@@ -102,7 +102,6 @@ final class Menu
 
                     <div class="sf-settings-card">
                         <h3>📄 Dokument: Owner E-Mail | Abschnitt: PDF Anhänge</h3>
-                        <p class="sf-hint">Texte für E-Mails, an die das Owner-PDF (Abrechnung/Bestätigung) angehängt wird.</p>
                         <table class="form-table">
                             <tr><th scope="row"><label>Betreff (E-Mail)</label></th><td><input type="text" name="<?php echo $optKey; ?>[owner_pdf][email_subject]" value="<?php echo esc_attr((string)$options['owner_pdf']['email_subject']); ?>" class="large-text"><p class="description">Variable: <code>{booking_id}</code></p></td></tr>
                             <tr><th scope="row"><label>Nachricht (E-Mail)</label></th><td><textarea name="<?php echo $optKey; ?>[owner_pdf][email_body]" rows="5" class="large-text"><?php echo esc_textarea((string)$options['owner_pdf']['email_body']); ?></textarea></td></tr>
@@ -118,7 +117,7 @@ final class Menu
     }
 
     // =========================================================================
-    // 3. ПОЛИТИКИ ОТМЕНЫ (Policies) - VISUAL EDITOR
+    // 3. ПОЛИТИКИ ОТМЕНЫ (Policies)
     // =========================================================================
     public function renderPolicies(): void
     {
@@ -128,51 +127,24 @@ final class Menu
         $def_flex = "<p><strong>Standard Flexible Cancellation Policy</strong></p>\n<ul>\n<li>Free cancellation up to <strong>{days} days before arrival</strong>.</li>\n<li>For cancellations made <strong>{penalty_days} days or less</strong> before arrival, as well as in case of no-show, <strong>100% of the total booking amount</strong> will be charged.</li>\n<li>Date changes are subject to availability and must be confirmed by Stay4Fair.</li>\n</ul>";
         $def_non_ref = "<p><strong>✨ Non-Refundable – Better Price & Premium Support</strong></p>\n<p>This non-refundable option is usually offered at a more attractive price than flexible bookings.</p>\n<h4>🔐 1. Protected & Guaranteed Booking</h4>\n<ul>\n<li>Your booking price is <strong>locked and protected</strong>.</li>\n<li>If the apartment becomes unavailable due to a landlord cancellation, Stay4Fair will arrange an <strong>equivalent or superior accommodation at no extra cost</strong>.</li>\n</ul>\n<h4>🔄 2. Flexible Date Adjustment</h4>\n<ul>\n<li>You may <strong>adjust your travel dates</strong>, subject to availability.</li>\n<li>The <strong>total number of nights cannot be reduced</strong>.</li>\n</ul>\n<p><strong>⚠️ Important:</strong><br>\nThis booking <strong>cannot be cancelled or refunded</strong>. Full payment remains <strong>non-refundable</strong> after confirmation.</p>";
 
-        // RU: Берем из базы, если пусто — подставляем дефолт
         $flex = !empty($options['free_cancellation']) ? $options['free_cancellation'] : $def_flex;
         $non_ref = !empty($options['non_refundable']) ? $options['non_refundable'] : $def_non_ref;
         ?>
         <div class="wrap stayflow-admin-wrap">
             <h1 class="sf-page-title">🛡️ Cancellation Policies</h1>
-            <p style="color: #64748b; margin-bottom: 30px;">Zentrale Verwaltung der Stornierungsbedingungen. Nutzen Sie den Editor für Text, Emojis oder HTML.</p>
             <?php settings_errors('stayflow_policies_group'); ?>
             <form method="post" action="options.php">
                 <?php settings_fields('stayflow_policies_group'); ?>
                 <div class="sf-settings-grid">
-                    
                     <div class="sf-settings-card">
                         <h3>🏨 Modul: Apartment-Seite & Checkout | Abschnitt: Flexible Stornierung</h3>
-                        <div class="sf-hint" style="margin-bottom: 15px; padding: 10px; background: #f8fafc; border-left: 3px solid #082567;">
-                            Wird verwendet, wenn der Host eine flexible Stornierung anbietet.<br>
-                            <strong>Dynamische Variablen (Shortcodes):</strong><br>
-                            <code>{days}</code> — Zeigt die Anzahl der Tage für kostenlose Stornierung (z.B. "14").<br>
-                            <code>{penalty_days}</code> — Zeigt die Tage, ab denen die Strafe anfällt (z.B. "13").
-                        </div>
-                        <?php 
-                        wp_editor($flex, 'free_cancellation_editor', [
-                            'textarea_name' => $optKey . '[free_cancellation]',
-                            'media_buttons' => false,
-                            'textarea_rows' => 10,
-                            'tinymce' => true,
-                        ]); 
-                        ?>
+                        <div class="sf-hint" style="margin-bottom: 15px; padding: 10px; background: #f8fafc; border-left: 3px solid #082567;">Variablen: <code>{days}</code>, <code>{penalty_days}</code></div>
+                        <?php wp_editor($flex, 'free_cancellation_editor', ['textarea_name' => $optKey . '[free_cancellation]', 'media_buttons' => false, 'textarea_rows' => 10, 'tinymce' => true]); ?>
                     </div>
-
                     <div class="sf-settings-card">
                         <h3>🏨 Modul: Apartment-Seite & Checkout | Abschnitt: Nicht erstattbar (Non-Refundable)</h3>
-                        <div class="sf-hint" style="margin-bottom: 15px; padding: 10px; background: #f8fafc; border-left: 3px solid #E0B849;">
-                            Standard-Text für die nicht erstattbare Rate. Emojis 🎉 und Formatierungen werden unterstützt.
-                        </div>
-                        <?php 
-                        wp_editor($non_ref, 'non_refundable_editor', [
-                            'textarea_name' => $optKey . '[non_refundable]',
-                            'media_buttons' => false,
-                            'textarea_rows' => 12,
-                            'tinymce' => true,
-                        ]); 
-                        ?>
+                        <?php wp_editor($non_ref, 'non_refundable_editor', ['textarea_name' => $optKey . '[non_refundable]', 'media_buttons' => false, 'textarea_rows' => 12, 'tinymce' => true]); ?>
                     </div>
-
                 </div>
                 <div style="margin-top: 20px;">
                     <?php submit_button('Policies speichern', 'primary', 'submit', false, ['style' => 'background: #082567; border-color: #082567; color: #E0B849; padding: 5px 25px; border-radius: 8px;']); ?>
@@ -184,7 +156,7 @@ final class Menu
     }
 
     // =========================================================================
-    // 4. РЕЕСТР КОНТЕНТА (Content Registry - Vouchers) - VISUAL EDITOR
+    // 4. CONTENT REGISTRY - VISUAL EDITOR
     // =========================================================================
     public function renderContentRegistry(): void
     {
@@ -193,8 +165,14 @@ final class Menu
         
         $def_voucher = "<strong>Check-in:</strong> ab 15:00 Uhr<br /><strong>Check-out:</strong> bis 11:00 Uhr<br /><br />Bitte kontaktieren Sie Ihren Gastgeber vorab bezüglich der Schlüsselübergabe.";
         
-        // RU: Берем из базы, если пусто — подставляем дефолт
+        $def_tax_single = "<p>Die Auszahlung erfolgt in der Regel innerhalb von 3–7 Werktagen nach Abreise des Gastes.</p>\n<p>Wir freuen uns über Ihre erfolgreichen Buchungen! Bitte beachten Sie, dass die erzielten Einkünfte aus der kurzfristigen Vermietung steuerpflichtig sind. Die Verantwortung für die korrekte Versteuerung sowie die Einhaltung aller steuerlichen Meldepflichten liegt gemäß den gesetzlichen Vorgaben beim Vermieter.</p>\n<p>Ein besonderer Hinweis zum Beherbergungsteuer (City Tax): Bitte prüfen Sie eigenständig die lokalen Satzungen Ihrer Stadt. In vielen Regionen sind Vermieter verpflichtet, diese Steuer ordnungsgemäß zu erfassen und abzuführen. Da die Handhabung je nach Aufenthaltszweck (geschäftlich oder privat) variieren kann, liegt die finale Prüfung und Abwicklung ausschließlich in Ihrer Hand.</p>\n<p>Stay4Fair unterstützt Sie mit der Bereitstellung der Buchungsdaten, übernimmt jedoch keine steuerliche Beratung oder Haftung.</p>";
+
+        $def_tax_monthly = "<p>Die Auszahlung erfolgt in der Regel innerhalb von 3–7 Werktagen nach Abreise des Gastes.</p>\n\n<p><strong>Für Buchungen nach Modell A (Direkt):</strong> Die Abführung der Beherbergungsteuer (City-Tax) für diese Buchungen wurde von Stay4Fair übernommen. Für die Versteuerung Ihrer Einkünfte sind Sie selbst verantwortlich.</p>\n\n<p><strong>Für Buchungen nach Modell B (Vermittlung):</strong> Bitte beachten Sie, dass die erzielten Einkünfte aus der kurzfristigen Vermietung steuerpflichtig sind. Die Verantwortung für die korrekte Versteuerung sowie die Einhaltung aller steuerlichen Meldepflichten liegt beim Vermieter. Bitte prüfen Sie eigenständig die lokalen Satzungen bezüglich Beherbergungssteuer (City Tax).</p>\n\n<p><strong>Stay4Fair unterstützt Sie mit der Bereitstellung der Buchungsdaten, übernimmt jedoch keine steuerliche Beratung oder Haftung.</strong></p>";
+
         $voucher_text = !empty($options['voucher_instructions']) ? $options['voucher_instructions'] : $def_voucher;
+        $tax_single   = !empty($options['tax_notice_single']) ? $options['tax_notice_single'] : $def_tax_single;
+        $tax_monthly  = !empty($options['tax_notice_monthly']) ? $options['tax_notice_monthly'] : $def_tax_monthly;
+
         ?>
         <div class="wrap stayflow-admin-wrap">
             <h1 class="sf-page-title">📝 Content Registry</h1>
@@ -206,18 +184,20 @@ final class Menu
                     
                     <div class="sf-settings-card">
                         <h3>📄 Dokument: Gast-Voucher (PDF) | Abschnitt: Check-in / Check-out Anweisungen</h3>
-                        <div class="sf-hint" style="margin-bottom: 15px; padding: 10px; background: #f8fafc; border-left: 3px solid #082567;">
-                            Dieser Text wird auf dem generierten Gast-Voucher (PDF) angezeigt.<br>
-                            Nutzen Sie den Reiter <strong>"Visual"</strong> für normalen Text/Emojis oder <strong>"Text"</strong> für HTML-Eingaben.
-                        </div>
-                        <?php 
-                        wp_editor($voucher_text, 'voucher_instructions_editor', [
-                            'textarea_name' => $optKey . '[voucher_instructions]',
-                            'media_buttons' => false,
-                            'textarea_rows' => 8,
-                            'tinymce' => true,
-                        ]); 
-                        ?>
+                        <div class="sf-hint" style="margin-bottom: 15px; padding: 10px; background: #f8fafc; border-left: 3px solid #082567;">Dieser Text wird auf dem generierten Gast-Voucher (PDF) angezeigt.</div>
+                        <?php wp_editor($voucher_text, 'voucher_instructions_editor', ['textarea_name' => $optKey . '[voucher_instructions]', 'media_buttons' => false, 'textarea_rows' => 8, 'tinymce' => true]); ?>
+                    </div>
+
+                    <div class="sf-settings-card">
+                        <h3>📄 Dokument: Owner Buchungsbestätigung (Einzel-PDF) | Abschnitt: Auszahlung & Steuerliche Hinweise</h3>
+                        <div class="sf-hint" style="margin-bottom: 15px; padding: 10px; background: #f8fafc; border-left: 3px solid #E0B849;">Dieser Text erscheint am Ende der <strong>einzelnen PDF-Buchungsbestätigung</strong> für den Vermieter.</div>
+                        <?php wp_editor($tax_single, 'tax_notice_single_editor', ['textarea_name' => $optKey . '[tax_notice_single]', 'media_buttons' => false, 'textarea_rows' => 12, 'tinymce' => true]); ?>
+                    </div>
+
+                    <div class="sf-settings-card">
+                        <h3>📄 Dokument: Owner Monatsabrechnung (PDF) | Abschnitt: Auszahlung & Steuerliche Hinweise</h3>
+                        <div class="sf-hint" style="margin-bottom: 15px; padding: 10px; background: #f8fafc; border-left: 3px solid #10b981;">Dieser Text erscheint am Ende der gebündelten <strong>Monatsabrechnung</strong>. Er enthält spezifische Hinweise für Modell A und Modell B.</div>
+                        <?php wp_editor($tax_monthly, 'tax_notice_monthly_editor', ['textarea_name' => $optKey . '[tax_notice_monthly]', 'media_buttons' => false, 'textarea_rows' => 12, 'tinymce' => true]); ?>
                     </div>
 
                 </div>
