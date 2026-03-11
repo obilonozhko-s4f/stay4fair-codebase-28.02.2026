@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: BSBT – Financial Snapshot (Enterprise Stable)
- * Version: 3.2.0
- * Description: Замораживает финансовые показатели (Snapshot) при подтверждении брони.
+ * Version: 3.3.0
+ * Description: Замораживает финансовые показатели (Snapshot) при подтверждении брони. Интегрирован с StayFlow Settings.
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -28,7 +28,7 @@ function bsbt_snapshot_on_confirmed( $new_status, $old_status, $post ) {
 
     $booking_id = (int) $post->ID;
 
-    // Idempotency lock
+    // RU: БЕТОН! Если слепок уже есть — выходим. Старые данные не пересчитываются!
     if ( get_post_meta( $booking_id, '_bsbt_snapshot_locked_at', true ) ) return;
 
     if ( ! function_exists( 'MPHB' ) ) return;
@@ -58,9 +58,22 @@ function bsbt_snapshot_on_confirmed( $new_status, $old_status, $post ) {
     // Модель
     $model = (string) ( get_post_meta( $room_type_id, '_bsbt_business_model', true ) ?: 'model_a' );
 
-    // Константы
-    $fee_rate = defined( 'BSBT_FEE' ) ? (float) BSBT_FEE : 0.0;
-    $vat_rate = defined( 'BSBT_VAT_ON_FEE' ) ? (float) BSBT_VAT_ON_FEE : 0.0;
+    // =========================================================================
+    // ИНТЕГРАЦИЯ С НАСТРОЙКАМИ STAYFLOW CORE (Динамическая комиссия)
+    // =========================================================================
+    $sf_settings = get_option( 'stayflow_core_settings', [] );
+    
+    // Ставка комиссии (из админки, например 0.15)
+    $fee_rate = isset( $sf_settings['commission_default'] ) 
+        ? (float) $sf_settings['commission_default'] 
+        : ( defined( 'BSBT_FEE' ) ? (float) BSBT_FEE : 0.15 );
+
+    // НДС платформы (из админки, например 19.0 -> переводим в 0.19)
+    $vat_rate_raw = isset( $sf_settings['platform_vat_rate'] ) 
+        ? (float) $sf_settings['platform_vat_rate'] 
+        : ( defined( 'BSBT_VAT_ON_FEE' ) ? (float) BSBT_VAT_ON_FEE * 100 : 19.0 );
+    $vat_rate = $vat_rate_raw / 100.0;
+    // =========================================================================
 
     // Payout entity
     $manager_user_id = (int) get_post_meta( $room_type_id, 'bsbt_owner_id', true );
@@ -107,18 +120,13 @@ function bsbt_snapshot_on_confirmed( $new_status, $old_status, $post ) {
 
     // =========================
     // MODEL A (resell/operator)
-    // guest_total = MPHB
-    // owner_payout = owner_price_per_night * nights
-    // margin_total = guest_total - owner_payout
     // =========================
     if ( $model === 'model_a' ) {
 
-        // Для Model A закупка обязательна
         if ( $ppn <= 0 ) return;
 
         $owner_payout = round( $ppn * $nights, 2 );
 
-        // RU: маржа платформы — разница между оплатой гостя и закупкой.
         $margin_total = round( $guest_total - $owner_payout, 2 );
         if ( $margin_total < 0 ) $margin_total = 0.0;
 
@@ -129,19 +137,15 @@ function bsbt_snapshot_on_confirmed( $new_status, $old_status, $post ) {
 
     // =========================
     // MODEL B (marketplace commission-inside)
-    // guest_total = MPHB
-    // commission_net = guest_total * BSBT_FEE
-    // commission_vat = commission_net * BSBT_VAT_ON_FEE
-    // owner_payout = guest_total - commission_net
+    // 15% - это Gross Commission. НДС (19%) вычленяется из нее.
     // =========================
     if ( $model === 'model_b' ) {
 
-        $commission_net   = round( $guest_total * max( 0.0, $fee_rate ), 2 );
-        $commission_vat   = round( $commission_net * max( 0.0, $vat_rate ), 2 );
-        $commission_gross = round( $commission_net + $commission_vat, 2 );
-        $owner_payout     = round( $guest_total - $commission_net, 2 );
+        $commission_gross = round( $guest_total * max( 0.0, $fee_rate ), 2 );
+        $commission_net   = round( $commission_gross / ( 1 + max( 0.0, $vat_rate ) ), 2 );
+        $commission_vat   = round( $commission_gross - $commission_net, 2 );
+        $owner_payout     = round( $guest_total - $commission_gross, 2 );
 
-        // RU: В Model B маржа как “разница” не используется — тут комиссия.
         $margin_total = 0.0;
     }
 
@@ -158,23 +162,19 @@ function bsbt_snapshot_on_confirmed( $new_status, $old_status, $post ) {
         '_bsbt_snapshot_guest_total'     => $guest_total,
         '_bsbt_snapshot_owner_payout'    => $owner_payout,
 
-        // RU: Для Model A = 0. Для Model B = комиссия платформы.
         '_bsbt_snapshot_fee_rate'        => $fee_rate,
         '_bsbt_snapshot_fee_vat_rate'    => $vat_rate,
         '_bsbt_snapshot_fee_net_total'   => $commission_net,
         '_bsbt_snapshot_fee_vat_total'   => $commission_vat,
         '_bsbt_snapshot_fee_gross_total' => $commission_gross,
 
-        // RU: Замороженная маржа для Model A.
         '_bsbt_snapshot_margin_total'    => $margin_total,
 
         '_bsbt_snapshot_locked_at'       => current_time( 'mysql' ),
-        '_bsbt_snapshot_version'         => '3.2.0',
+        '_bsbt_snapshot_version'         => '3.3.0',
     ];
 
     foreach ( $snapshot as $key => $val ) {
         update_post_meta( $booking_id, $key, $val );
     }
-
-    // Snapshot не управляет owner decision
 }
