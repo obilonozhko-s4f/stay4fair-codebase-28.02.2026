@@ -1,9 +1,9 @@
 <?php
 /**
  * Plugin Name: BSBT – Owner Dashboard (Total 3D Aligned)
- * Version: 18.0.7
- * RU: Дашборд владельца (Обновлены ссылки на новые английские URL).
- * EN: Owner dashboard (Updated links to new English URLs).
+ * Version: 18.0.8
+ * RU: Дашборд владельца (Интегрирован алерт профиля DAC7).
+ * EN: Owner dashboard (Profile DAC7 alert integrated).
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -40,6 +40,12 @@ final class BSBT_Aligned_3D_Dashboard {
             'post_status'    => 'any'
         ]);
         $apartments_count = count($apts);
+
+        // RU: Проверка заполненности профиля (IBAN + Steuernummer)
+        $profile_action_required = false;
+        if (class_exists('\StayFlow\CPT\OwnerProfileProvider')) {
+            $profile_action_required = \StayFlow\CPT\OwnerProfileProvider::isActionRequired($user->ID);
+        }
         
         ob_start(); ?>
 
@@ -96,9 +102,13 @@ final class BSBT_Aligned_3D_Dashboard {
             .bsbt-glass-card:hover { transform: translateY(-8px) !important; border-color: <?php echo $gold; ?> !important; box-shadow: 0 20px 40px rgba(8, 37, 103, 0.1) !important; }
 
             .sf-empty-tile-pulse { box-shadow: 0 0 15px rgba(224, 184, 73, 0.8) !important; animation: pulse-gold 2s infinite; border: 2px solid #E0B849 !important; }
+            .sf-danger-tile-pulse { box-shadow: 0 0 15px rgba(239, 68, 68, 0.5) !important; animation: pulse-red 2s infinite; border: 2px solid #ef4444 !important; }
+            
             @keyframes pulse-gold { 0% { box-shadow: 0 0 0 0 rgba(224, 184, 73, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(224, 184, 73, 0); } 100% { box-shadow: 0 0 0 0 rgba(224, 184, 73, 0); } }
+            @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); } 70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
 
-            .bsbt-bubble-icon { width: 70px; height: 70px; background: radial-gradient(circle at 30% 30%, #ffffff 0%, #f1f5f9 100%); border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 32px; margin-bottom: 15px; }
+            .bsbt-bubble-icon { width: 70px; height: 70px; background: radial-gradient(circle at 30% 30%, #ffffff 0%, #f1f5f9 100%); border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 32px; margin-bottom: 15px; position: relative; }
+            .bsbt-red-dot { position: absolute; top: -5px; right: -5px; width: 16px; height: 16px; background-color: #ef4444; border-radius: 50%; border: 3px solid #fff; }
 
             @media (max-width: 767px) {
                 .bsbt-header-row { flex-direction: column !important; align-items: flex-start !important; gap: 15px !important; }
@@ -140,43 +150,56 @@ final class BSBT_Aligned_3D_Dashboard {
 
                 <div class="bsbt-grid">
                     <?php
-                $items = [
+                    $items = [
                         ['Meine Buchungen', '📅', '/owner-bookings/'],
                         ['Apartments', '🏢', '#'], 
                         ['Finanzen', '💳', '/owner-dashboard-finanzen/'],
-                        // БЫЛО: ['Kalender', '🗓️', '#'],
-                        // СТАЛО:
                         ['Kalender', '🗓️', '/owner-calendar/'],
-                        ['Mein Profil', '👤', '#'],
+                        ['Mein Profil', '👤', '/owner-profile/'], // RU: Ссылка на профиль обновлена
                         ['Support', '🎧', '#']
                     ];                    
+                    
                     foreach ($items as $item) : 
                         $link = $item[2];
                         $class = 'bsbt-glass-card';
                         $action_text = 'Öffnen';
+                        $show_red_dot = false;
 
-                        // RU: Логика маршрутизации для плитки Apartments.
-                        // Если 0 квартир -> /add-apartment/
-                        // Если есть -> /owner-apartments/ (твой список)
+                        // RU: Логика маршрутизации для Apartments
                         if ($item[0] === 'Apartments') {
                             if ($apartments_count === 0) {
                                 $link = home_url('/add-apartment/');
                                 $class = 'bsbt-glass-card sf-empty-tile-pulse';
                                 $action_text = 'Erstes hinzufügen';
                             } else {
-                                $link = home_url('/owner-apartments/'); // Твой новый slug
+                                $link = home_url('/owner-apartments/');
                                 $class = 'bsbt-glass-card';
                                 $action_text = 'Öffnen / Neu';
                             }
                         }
+
+                        // RU: Логика алерта для Профиля (DAC7)
+                        if ($item[0] === 'Mein Profil' && $profile_action_required) {
+                            $class = 'bsbt-glass-card sf-danger-tile-pulse';
+                            $action_text = 'Daten fehlen (DAC7)';
+                            $show_red_dot = true;
+                        }
                     ?>
                         <a href="<?php echo esc_url($link); ?>" class="<?php echo esc_attr($class); ?>">
-                            <div class="bsbt-bubble-icon"><?php echo $item[1]; ?></div>
+                            <div class="bsbt-bubble-icon">
+                                <?php echo $item[1]; ?>
+                                <?php if ($show_red_dot): ?>
+                                    <div class="bsbt-red-dot" title="Aktion erforderlich"></div>
+                                <?php endif; ?>
+                            </div>
                             <h4 style="margin:0 0 5px 0; font-size: 18px; color: <?php echo $navy; ?>;"><?php echo $item[0]; ?></h4>
-                            <span style="font-size: 10px; color: #cbd5e1; font-weight: 700; text-transform: uppercase;"><?php echo $action_text; ?></span>
                             
-                            <?php if ($item[0] === 'Apartments' && $apartments_count === 0): ?>
-                                <div style="font-size: 11px; color: <?php echo $gold; ?>; margin-top: 8px; font-weight: bold; text-transform: uppercase;">Aktion erforderlich</div>
+                            <?php if ($item[0] === 'Mein Profil' && $profile_action_required): ?>
+                                <span style="font-size: 10px; color: #ef4444; font-weight: 700; text-transform: uppercase;"><?php echo $action_text; ?></span>
+                            <?php elseif ($item[0] === 'Apartments' && $apartments_count === 0): ?>
+                                <span style="font-size: 10px; color: <?php echo $gold; ?>; font-weight: 700; text-transform: uppercase;"><?php echo $action_text; ?></span>
+                            <?php else: ?>
+                                <span style="font-size: 10px; color: #cbd5e1; font-weight: 700; text-transform: uppercase;"><?php echo $action_text; ?></span>
                             <?php endif; ?>
                         </a>
                     <?php endforeach; ?>
