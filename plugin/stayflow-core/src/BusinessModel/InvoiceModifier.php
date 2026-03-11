@@ -11,6 +11,10 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+/**
+ * Version: 1.4.0
+ * RU: Модификатор инвойсов. Берет динамические настройки из StayFlow Settings.
+ */
 final class InvoiceModifier
 {
     public static function init(): void
@@ -38,10 +42,21 @@ final class InvoiceModifier
     private static function getSettings(): array
     {
         $settings = get_option('stayflow_core_settings', []);
+        
+        $fee_raw = isset($settings['commission_default']) ? (float)$settings['commission_default'] : 15.0;
+        if ($fee_raw > 0.0 && $fee_raw <= 1.0) {
+            $fee_raw *= 100;
+        }
+        
+        $vat_b = isset($settings['platform_vat_rate']) ? (float)$settings['platform_vat_rate'] : 19.0;
+        $vat_a = isset($settings['platform_vat_rate_a']) ? (float)$settings['platform_vat_rate_a'] : 7.0;
+
         return [
-            'fee'   => isset($settings['commission_default']) ? (float)$settings['commission_default'] : 0.15,
-            'vat_b' => isset($settings['platform_vat_rate']) ? ((float)$settings['platform_vat_rate'] / 100) : 0.19,
-            'vat_a' => isset($settings['platform_vat_rate_a']) ? ((float)$settings['platform_vat_rate_a'] / 100) : 0.07,
+            'fee'       => $fee_raw / 100.0,
+            'vat_b'     => $vat_b / 100.0,
+            'vat_a'     => $vat_a / 100.0,
+            'vat_b_raw' => $vat_b,
+            'vat_a_raw' => $vat_a,
         ];
     }
 
@@ -205,8 +220,9 @@ final class InvoiceModifier
             }
 
             if ($vat > 0) {
-                // Динамический текст НДС
-                $vatPercent = $s['vat_b'] * 100;
+                // RU: Динамический текст НДС. Убираем .0 если число целое (например 19%)
+                $vatPercent = fmod($s['vat_b_raw'], 1) == 0 ? (int)$s['vat_b_raw'] : round($s['vat_b_raw'], 1);
+                
                 $html = self::insertRowBeforeTotal(
                     $html,
                     "incl. Service Fee VAT ({$vatPercent}%)",
@@ -220,7 +236,8 @@ final class InvoiceModifier
 
             if ($vat > 0) {
                 // Динамический текст НДС для Модели А
-                $vatPercent = $s['vat_a'] * 100;
+                $vatPercent = fmod($s['vat_a_raw'], 1) == 0 ? (int)$s['vat_a_raw'] : round($s['vat_a_raw'], 1);
+                
                 $html = self::insertRowBeforeTotal(
                     $html,
                     "VAT ({$vatPercent}%) included",
