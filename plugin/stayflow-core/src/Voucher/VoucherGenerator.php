@@ -9,9 +9,9 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * Version: 1.1.0
- * RU: Генератор Ваучеров (HTML и PDF) с агрессивным парсингом гостей.
- * EN: Voucher Generator (HTML & PDF) with aggressive guest parsing.
+ * Version: 1.2.0
+ * RU: Генератор Ваучеров (HTML и PDF). Тексты и политики теперь берутся из админки.
+ * EN: Voucher Generator (HTML & PDF). Texts and policies are now fetched from admin.
  */
 final class VoucherGenerator
 {
@@ -166,7 +166,6 @@ final class VoucherGenerator
         $guestNamesArr = [];
         $totalGuests = 0;
 
-        // Основной гость из полей брони
         $guestFirst = trim((string)get_post_meta($bookingId,'mphb_first_name',true));
         $guestLast  = trim((string)get_post_meta($bookingId,'mphb_last_name',true));
         $mainGuestName = trim($guestFirst . ' ' . $guestLast);
@@ -174,7 +173,6 @@ final class VoucherGenerator
             $guestNamesArr[] = $mainGuestName;
         }
 
-        // Попытка 1: Через API MotoPress (самый надежный способ для новых версий)
         if (isset($booking) && $booking) {
             try {
                 $reserved = $booking->getReservedRooms();
@@ -192,7 +190,6 @@ final class VoucherGenerator
             } catch (\Throwable $e) {}
         }
 
-        // Попытка 2: Если API не вернуло гостей, парсим сырой мета-массив (для старых версий)
         if ($totalGuests === 0) {
             $roomDetails = get_post_meta($bookingId, 'mphb_room_details', true);
             if (is_array($roomDetails) && !empty($roomDetails)) {
@@ -209,7 +206,6 @@ final class VoucherGenerator
             }
         }
 
-        // Попытка 3: Экстренные фоллбэки
         if ($totalGuests <= 0) {
             $totalGuests = (int)get_post_meta($bookingId, 'mphb_adults', true) + (int)get_post_meta($bookingId, 'mphb_children', true);
         }
@@ -218,7 +214,6 @@ final class VoucherGenerator
         }
         if ($totalGuests <= 0) $totalGuests = 1;
 
-        // Финальная очистка имен (разбиваем по запятым, если кто-то ввел всех в одно поле)
         $cleanNames = [];
         foreach ($guestNamesArr as $nameStr) {
             $parts = explode(',', $nameStr);
@@ -233,7 +228,7 @@ final class VoucherGenerator
 
 
         // =========================================================
-        // 3. DATES, TIMES & POLICY (Даты и политики)
+        // 3. DATES, TIMES & POLICY (Из базы данных Политик)
         // =========================================================
         $checkIn  = trim((string)get_post_meta($bookingId,'mphb_check_in_date',true));
         $checkOut = trim((string)get_post_meta($bookingId,'mphb_check_out_date',true));
@@ -243,33 +238,31 @@ final class VoucherGenerator
         $policyType = get_post_meta($roomTypeId, '_sf_cancellation_policy', true) ?: 'non_refundable';
         $cancelDays = (int) get_post_meta($roomTypeId, '_sf_cancellation_days', true);
         
+        // RU: Берем политики из админки (Policy Registry)
+        $policyReg = get_option('stayflow_registry_policies', []);
+
         if ($policyType === 'free_cancellation' && $cancelDays > 0) {
             $penaltyDays = $cancelDays - 1;
-            $policyHtml  = '<p><strong>Standard Flexible Cancellation Policy</strong></p>';
-            $policyHtml .= '<ul><li>Free cancellation up to <strong>' . $cancelDays . ' days before arrival</strong>.</li>';
-            $policyHtml .= '<li>For cancellations made <strong>' . $penaltyDays . ' days or less</strong> before arrival, as well as in case of no-show, <strong>100% of the total booking amount</strong> will be charged.</li>';
-            $policyHtml .= '<li>Date changes are subject to availability and must be confirmed by Stay4Fair.</li></ul>';
+            $policyRaw = $policyReg['free_cancellation'] ?? "<ul><li>Free cancellation up to <strong>{days} days before arrival</strong>.</li><li>Penalty from <strong>{penalty_days} days</strong>.</li></ul>";
+            $policyHtml = str_replace(['{days}', '{penalty_days}'], [(string)$cancelDays, (string)$penaltyDays], $policyRaw);
         } else {
-            $policyHtml  = '<p><strong>Non-Refundable – Better Price & Premium Support</strong></p>';
-            $policyHtml .= '<p>This non-refundable option is usually offered at a more attractive price than flexible bookings.</p>';
-            $policyHtml .= '<h4>1. Protected & Guaranteed Booking</h4>';
-            $policyHtml .= '<ul><li>Your booking price is <strong>locked and protected</strong>.</li><li>If the apartment becomes unavailable, Stay4Fair will arrange an <strong>equivalent or superior accommodation at no extra cost</strong>.</li><li>Priority assistance and relocation support.</li></ul>';
-            $policyHtml .= '<h4>2. Flexible Date Adjustment</h4>';
-            $policyHtml .= '<ul><li>You may <strong>adjust your travel dates</strong>, subject to availability.</li><li>The <strong>total number of nights cannot be reduced</strong>.</li></ul>';
-            $policyHtml .= '<p><strong>Important:</strong> This booking <strong>cannot be cancelled or refunded</strong>.</p>';
+            $policyHtml = $policyReg['non_refundable'] ?? "<p><strong>Non-Refundable</strong></p>";
         }
 
         // =========================================================
-        // 4. DYNAMIC TEXTS (Тексты из админки)
+        // 4. DYNAMIC TEXTS (Тексты из админки Content Registry)
         // =========================================================
-        $defaultInstructions = 'The keys will be handed over to you at check-in, directly in the apartment (please inform us about your arrival time).<br>Please note: this is a private apartment.<br>Light cleaning will be performed every third day. We kindly ask you to keep the apartment in order, too.<br>At check-out, you may leave the keys on the table and close the door, or coordinate your check-out time with our manager or the landlord to hand over the keys personally.<br>Please handle the apartment and its inventory with care. In case of any damage to the landlord’s property, the guest must compensate the damage to the company or directly to the landlord.';
-        $instructions = get_option('sf_voucher_checkin_instructions', $defaultInstructions);
-        $contactLine = get_option('sf_voucher_contacts', 'WhatsApp: +49 176 24615269 · E-mail: business@stay4fair.com · stay4fair.com');
+        $contentReg = get_option('stayflow_registry_content', []);
+        
+        $defaultInstructions = "<strong>Check-in:</strong> ab 15:00 Uhr\n<strong>Check-out:</strong> bis 11:00 Uhr\n\nBitte kontaktieren Sie Ihren Gastgeber vorab bezüglich der Schlüsselübergabe.";
+        $instructionsRaw = $contentReg['voucher_instructions'] ?? $defaultInstructions;
+        $instructions = nl2br(wp_kses_post($instructionsRaw));
+        
+        $contactLine = 'WhatsApp: +49 176 24615269 · E-mail: business@stay4fair.com · stay4fair.com';
 
         $voucherNo = self::getVoucherNumber($bookingId);
         $logoUrl = 'https://stay4fair.com/wp-content/uploads/2025/12/gorizontal-color-4.png';
 
-        // RU: Возвращаем оригинальный безопасный HTML-код
         ob_start(); ?>
         <!doctype html>
         <html>
@@ -338,7 +331,7 @@ final class VoucherGenerator
             </div>
             <div class="box mt small">
                 <div class="label">Cancellation policy details</div>
-                <div><?php echo $policyHtml; ?></div>
+                <div><?php echo wp_kses_post($policyHtml); ?></div>
             </div>
             <div class="box mt small">
                 <div class="label">Contacts</div>
