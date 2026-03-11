@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: BSBT – Owner Finances
- * Description: Финансовый отчет владельца на базе Snapshot. (V1.2.9 - Pagination Added)
- * Version: 1.2.9
+ * Description: Финансовый отчет владельца на базе Snapshot. (V1.3.0 - Monthly PDF added)
+ * Version: 1.3.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -41,26 +41,13 @@ final class BSBT_Owner_Finances {
         $user_id  = get_current_user_id();
         $is_admin = current_user_can('manage_options');
         $selected_year = isset($_GET['f_year']) ? (int)$_GET['f_year'] : (int)date('Y');
-
-        // ✅ Pagination (ADDED)
         $paged = max(1, (int)($_GET['paged'] ?? 1));
 
-        /**
-         * IMPORTANT:
-         * Мы НЕ фильтруем по _bsbt_owner_decision на уровне WP_Query,
-         * потому что decision мог быть записан разными версиями логики.
-         * Единственный "источник истины" для Finanzen — наличие _bsbt_snapshot_owner_payout.
-         */
         $args = [
             'post_type'      => 'mphb_booking',
             'post_status'    => 'any',
-
-            // ✅ CHANGED ONLY THIS: was -1
             'posts_per_page' => 25,
-
-            // ✅ Pagination (ADDED)
             'paged'          => $paged,
-
             'meta_key'       => 'mphb_check_in_date',
             'meta_type'      => 'DATE',
             'orderby'        => 'meta_value',
@@ -95,12 +82,8 @@ final class BSBT_Owner_Finances {
 
                 $out      = (string)get_post_meta($bid, 'mphb_check_out_date', true);
                 $payout   = (float) get_post_meta($bid, '_bsbt_snapshot_owner_payout', true);
-
-                // Доп. страховка: если payout по какой-то причине пустой/0 — всё равно показываем строку,
-                // но не добавляем в сумму (чтобы не ломать отчёт).
                 $payout_display = $payout;
 
-                // Decision — просто информативно (не блокирует показ)
                 $decision = (string) get_post_meta($bid, '_bsbt_owner_decision', true);
                 if ($decision === '') $decision = '—';
 
@@ -162,7 +145,7 @@ final class BSBT_Owner_Finances {
             .bsbt-year-tabs a.active { background:#082567; color:#fff; }
             .bsbt-year-tabs a.inactive { background:#f4f4f4; color:#555; border:1px solid #eee; }
 
-            .bsbt-card { background:#fff; border:1px solid #e5e5e5; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.05); overflow:hidden; }
+            .bsbt-card { background:#fff; border:1px solid #e5e5e5; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.05); overflow:hidden; margin-bottom: 20px; }
             .bsbt-table { width:100%; border-collapse: collapse; }
             .bsbt-table th { background:#f8fafc; text-align:left; color:#082567; font-size:11px; text-transform:uppercase; font-weight:800; letter-spacing:0.5px; padding:15px 12px; border-bottom:1px solid #e2e8f0; }
             .bsbt-table td { padding:18px 12px; border-bottom:1px solid #f1f5f9; color:#334155; vertical-align: middle; }
@@ -171,48 +154,22 @@ final class BSBT_Owner_Finances {
             .cell-content small { color:#94a3b8; display:block; font-size:11px; font-weight: 600; }
 
             .bsbt-pdf-btn-v3 {
-                position: relative !important;
-                overflow: hidden !important;
-                display: inline-flex !important;
-                align-items: center;
-                justify-content: center;
-                padding: 10px 20px !important;
-                border-radius: 10px !important;
-                border: none !important;
-                text-decoration: none !important;
-                font-size: 13px !important;
-                font-weight: 700 !important;
-                cursor: pointer !important;
-                z-index: 2;
-                transition: all 0.25s ease !important;
-
-                background-color: #082567 !important;
-                color: #E0B849 !important;
+                position: relative !important; overflow: hidden !important; display: inline-flex !important;
+                align-items: center; justify-content: center; padding: 10px 20px !important;
+                border-radius: 10px !important; border: none !important; text-decoration: none !important;
+                font-size: 13px !important; font-weight: 700 !important; cursor: pointer !important; z-index: 2;
+                transition: all 0.25s ease !important; background-color: #082567 !important; color: #E0B849 !important;
                 background-image: linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(0,0,0,0.15) 100%) !important;
                 background-blend-mode: overlay;
-
-                box-shadow: 0 14px 28px rgba(0,0,0,0.45),
-                            0 4px 8px rgba(0,0,0,0.25),
-                            inset 0 -5px 10px rgba(0,0,0,0.50),
-                            inset 0 1px 0 rgba(255,255,255,0.30),
-                            inset 0 0 0 1px rgba(255,255,255,0.06) !important;
+                box-shadow: 0 14px 28px rgba(0,0,0,0.45), 0 4px 8px rgba(0,0,0,0.25), inset 0 -5px 10px rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,255,255,0.30), inset 0 0 0 1px rgba(255,255,255,0.06) !important;
             }
-
             .bsbt-pdf-btn-v3::before {
-                content: "" !important;
-                position: absolute !important;
-                top: 2% !important; left: 6% !important; width: 88% !important; height: 55% !important;
+                content: "" !important; position: absolute !important; top: 2% !important; left: 6% !important; width: 88% !important; height: 55% !important;
                 background: radial-gradient(ellipse at center, rgba(255,255,255,0.65) 0%, rgba(255,255,255,0.00) 72%) !important;
-                transform: scaleY(0.48) !important;
-                filter: blur(5px) !important;
-                opacity: 0.55 !important;
-                z-index: 1 !important;
-                pointer-events: none !important;
+                transform: scaleY(0.48) !important; filter: blur(5px) !important; opacity: 0.55 !important; z-index: 1 !important; pointer-events: none !important;
             }
-
             .bsbt-pdf-btn-v3:hover {
-                background-color: #E0B849 !important;
-                color: #082567 !important;
+                background-color: #E0B849 !important; color: #082567 !important;
                 background-image: linear-gradient(180deg, rgba(255,255,255,0.4) 0%, rgba(0,0,0,0.1) 100%) !important;
                 transform: translateY(-2px) !important;
             }
@@ -237,6 +194,43 @@ final class BSBT_Owner_Finances {
         </style>
 
         <div class="bsbt-finances-wrap">
+            
+            <div style="background: #fff; border: 1px solid #e5e5e5; border-radius: 12px; padding: 20px; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); display: flex; flex-wrap: wrap; gap: 15px; align-items: center; justify-content: space-between;">
+                <div>
+                    <h3 style="margin: 0 0 5px 0; color: #082567; font-size: 18px;">📊 Monatsabrechnung (PDF)</h3>
+                    <p style="margin: 0; font-size: 13px; color: #64748b;">Laden Sie eine detaillierte Übersicht aller Abrechnungen für einen bestimmten Monat herunter (basierend auf dem Abreisedatum).</p>
+                </div>
+                <form method="POST" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <input type="hidden" name="action" value="bsbt_owner_monthly_pdf">
+                    <?php wp_nonce_field('bsbt_owner_monthly_pdf', 'monthly_pdf_nonce'); ?>
+                    
+                    <select name="f_month" style="padding: 10px 15px; border-radius: 8px; border: 1px solid #cbd5e1; outline: none; font-weight: 600; color: #082567; background: #f8fafc; font-size: 14px;">
+                        <?php
+                        $months = [1=>'Januar',2=>'Februar',3=>'März',4=>'April',5=>'Mai',6=>'Juni',7=>'Juli',8=>'August',9=>'September',10=>'Oktober',11=>'November',12=>'Dezember'];
+                        $current_m = (int)date('n');
+                        foreach($months as $m_num => $m_name) {
+                            $sel = ($m_num === $current_m) ? 'selected' : '';
+                            echo "<option value='{$m_num}' {$sel}>{$m_name}</option>";
+                        }
+                        ?>
+                    </select>
+                    
+                    <select name="f_year" style="padding: 10px 15px; border-radius: 8px; border: 1px solid #cbd5e1; outline: none; font-weight: 600; color: #082567; background: #f8fafc; font-size: 14px;">
+                        <?php
+                        if (!empty($available_years)) {
+                            foreach ($available_years as $y) {
+                                $sel = ($y === $selected_year) ? 'selected' : '';
+                                echo "<option value='{$y}' {$sel}>{$y}</option>";
+                            }
+                        } else {
+                            echo "<option value='{$selected_year}'>{$selected_year}</option>";
+                        }
+                        ?>
+                    </select>
+                    
+                    <button type="submit" class="bsbt-pdf-btn-v3" style="border: none;">📥 Download PDF</button>
+                </form>
+            </div>
             <?php if (count($available_years) > 1): ?>
             <div class="bsbt-year-tabs">
                 <?php foreach ($available_years as $y):
