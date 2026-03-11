@@ -9,68 +9,96 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * Version: 1.0.0
+ * Version: 1.1.0
  * RU: Провайдер страницы профиля владельца.
- * - Вывод формы настроек профиля (Personal, Company, Bank, Security).
- * - Логика проверки полноты данных для бейджа Action Required.
- * EN: Owner Profile Page Provider.
+ * - [FIX]: Ключи синхронизированы с админкой (bsbt_iban, bsbt_account_holder, bsbt_tax_number).
+ * - [NEW]: Добавлены хуки для вывода недостающих полей (доп. телефон, компания) в админку WP.
  */
 final class OwnerProfileProvider
 {
-    // === SECTION: Registration ===
-
     public function register(): void
     {
         add_shortcode('sf_owner_profile', [$this, 'renderProfile']);
+        
+        // RU: Вывод полей в админку (wp-admin/user-edit.php)
+        add_action('show_user_profile', [$this, 'addAdminUserFields']);
+        add_action('edit_user_profile', [$this, 'addAdminUserFields']);
+        
+        // RU: Сохранение полей из админки
+        add_action('personal_options_update', [$this, 'saveAdminUserFields']);
+        add_action('edit_user_profile_update', [$this, 'saveAdminUserFields']);
     }
 
-    // === SECTION: Action Required Logic ===
-
-    /**
-     * RU: Проверка, заполнены ли критические поля (IBAN и Steuernummer)
-     * EN: Check if critical fields are filled (IBAN and Steuernummer)
-     */
     public static function isActionRequired(int $userId): bool
     {
-        $iban = get_user_meta($userId, 'sf_bank_iban', true);
-        $steuernummer = get_user_meta($userId, 'sf_steuernummer', true);
+        // Используем правильные ключи
+        $iban = get_user_meta($userId, 'bsbt_iban', true);
+        $steuernummer = get_user_meta($userId, 'bsbt_tax_number', true);
         
         return empty(trim((string)$iban)) || empty(trim((string)$steuernummer));
+    }
+
+    // === SECTION: Admin Fields ===
+
+    public function addAdminUserFields(\WP_User $user): void
+    {
+        $altPhone = get_user_meta($user->ID, 'bsbt_alt_phone', true);
+        $accType = get_user_meta($user->ID, 'sf_account_type', true) ?: 'private';
+        $companyName = get_user_meta($user->ID, 'sf_company_name', true);
+        $vatId = get_user_meta($user->ID, 'sf_vat_id', true);
+        $companyReg = get_user_meta($user->ID, 'sf_company_reg', true);
+
+        echo '<h3>StayFlow: Zusätzliche Owner-Daten</h3>';
+        echo '<table class="form-table">';
+        
+        echo '<tr><th><label>Account Typ</label></th><td><input type="text" value="' . esc_attr(ucfirst($accType)) . '" class="regular-text" readonly></td></tr>';
+        echo '<tr><th><label for="bsbt_alt_phone">Alternative Telefonnummer</label></th><td><input type="text" name="bsbt_alt_phone" id="bsbt_alt_phone" value="' . esc_attr($altPhone) . '" class="regular-text"></td></tr>';
+        
+        echo '<tr><th><label for="sf_company_name">Firmenname</label></th><td><input type="text" name="sf_company_name" id="sf_company_name" value="' . esc_attr($companyName) . '" class="regular-text"></td></tr>';
+        echo '<tr><th><label for="sf_vat_id">USt-IdNr. (VAT ID)</label></th><td><input type="text" name="sf_vat_id" id="sf_vat_id" value="' . esc_attr($vatId) . '" class="regular-text"></td></tr>';
+        echo '<tr><th><label for="sf_company_reg">Handelsregisternummer</label></th><td><input type="text" name="sf_company_reg" id="sf_company_reg" value="' . esc_attr($companyReg) . '" class="regular-text"></td></tr>';
+        
+        echo '</table>';
+    }
+
+    public function saveAdminUserFields(int $userId): void
+    {
+        if (!current_user_can('edit_user', $userId)) return;
+        
+        if (isset($_POST['bsbt_alt_phone'])) update_user_meta($userId, 'bsbt_alt_phone', sanitize_text_field($_POST['bsbt_alt_phone']));
+        if (isset($_POST['sf_company_name'])) update_user_meta($userId, 'sf_company_name', sanitize_text_field($_POST['sf_company_name']));
+        if (isset($_POST['sf_vat_id'])) update_user_meta($userId, 'sf_vat_id', sanitize_text_field($_POST['sf_vat_id']));
+        if (isset($_POST['sf_company_reg'])) update_user_meta($userId, 'sf_company_reg', sanitize_text_field($_POST['sf_company_reg']));
     }
 
     // === SECTION: Render Page ===
 
     public function renderProfile(): string
     {
-        if (!is_user_logged_in()) {
-            return '<div class="sf-alert">Bitte loggen Sie sich ein.</div>';
-        }
+        if (!is_user_logged_in()) return '<div class="sf-alert">Bitte loggen Sie sich ein.</div>';
 
         $user = wp_get_current_user();
         $userId = $user->ID;
 
-        // Данные аккаунта
         $accType     = get_user_meta($userId, 'sf_account_type', true) ?: 'private';
         $firstName   = get_user_meta($userId, 'first_name', true) ?: $user->first_name;
         $lastName    = get_user_meta($userId, 'last_name', true) ?: $user->last_name;
         $email       = $user->user_email;
         $phone       = get_user_meta($userId, 'billing_phone', true);
-        $altPhone    = get_user_meta($userId, 'sf_alt_phone', true);
         
-        // Адрес
+        // RU: Исправленные ключи
+        $altPhone    = get_user_meta($userId, 'bsbt_alt_phone', true);
+        $bankName    = get_user_meta($userId, 'bsbt_account_holder', true) ?: "$firstName $lastName";
+        $iban        = get_user_meta($userId, 'bsbt_iban', true);
+        $steuerId    = get_user_meta($userId, 'bsbt_tax_number', true);
+
         $address     = get_user_meta($userId, 'billing_address_1', true);
         $postcode    = get_user_meta($userId, 'billing_postcode', true);
         $city        = get_user_meta($userId, 'billing_city', true);
 
-        // Коммерческие данные (если юр.лицо)
         $companyName = get_user_meta($userId, 'sf_company_name', true);
         $vatId       = get_user_meta($userId, 'sf_vat_id', true);
         $companyReg  = get_user_meta($userId, 'sf_company_reg', true);
-
-        // Банк и налоги (DAC7)
-        $bankName    = get_user_meta($userId, 'sf_bank_kontoinhaber', true) ?: "$firstName $lastName";
-        $iban        = get_user_meta($userId, 'sf_bank_iban', true);
-        $steuerId    = get_user_meta($userId, 'sf_steuernummer', true);
 
         $actionRequired = self::isActionRequired($userId);
 
@@ -94,7 +122,6 @@ final class OwnerProfileProvider
             .sf-form-group label { font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 5px; }
             .sf-form-group input { padding: 10px 12px; border-radius: 8px; border: 1px solid #cbd5e1; outline: none; font-size: 14px; transition: 0.2s; }
             .sf-form-group input:focus { border-color: #082567; box-shadow: 0 0 0 3px rgba(8,37,103,0.1); }
-            .sf-form-group input[disabled] { background: #f1f5f9; color: #94a3b8; cursor: not-allowed; }
 
             .sf-3d-btn { position: relative !important; overflow: hidden !important; border-radius: 10px !important; border: none !important; box-shadow: 0 14px 28px rgba(0,0,0,0.45), 0 4px 8px rgba(0,0,0,0.25), inset 0 -5px 10px rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,255,255,0.30), inset 0 0 0 1px rgba(255,255,255,0.06) !important; transition: all 0.25s ease !important; cursor: pointer !important; display: inline-flex; align-items: center; justify-content: center; padding: 12px 24px; background-color: #E0B849 !important; color: #082567 !important; background-image: linear-gradient(180deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.1) 55%, rgba(0,0,0,0.18) 100%) !important; background-blend-mode: overlay; font-weight: 700; font-size: 14px; }
             .sf-3d-btn:hover { transform: translateY(-2px) !important; background-color: #082567 !important; color: #E0B849 !important; }
@@ -266,7 +293,6 @@ final class OwnerProfileProvider
         </div>
 
         <script>
-            // Проверка совпадения новых паролей
             document.querySelector('input[name="new_pass_confirm"]').addEventListener('input', function(e) {
                 const p1 = document.querySelector('input[name="new_pass"]').value;
                 if (p1 && e.target.value !== p1) {
