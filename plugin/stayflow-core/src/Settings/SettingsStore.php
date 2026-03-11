@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace StayFlow\Settings;
 
 /**
- * Version: 1.1.2
- * RU: Хранилище настроек с исправленными текстами для успешной регистрации (DE).
- * EN: Settings storage with corrected success registration texts (DE).
+ * Version: 1.3.0
+ * RU: Хранилище настроек.
+ * - [NEW]: Добавлены глобальные шорткоды [sf_commission] и [sf_vat] для фронтенда (Elementor).
+ * EN: Settings storage with frontend shortcodes for dynamic rates.
  */
 final class SettingsStore
 {
@@ -16,19 +17,19 @@ final class SettingsStore
     public static function defaults(): array
     {
         return [
-            'platform_country'    => '',
+            'platform_country'    => 'DE',
             'base_currency'       => 'EUR',
-            'platform_vat_rate'   => 0.0,
+            'platform_vat_rate'   => 19.0,
             'commission_default'  => 0.15, // 15%
             'commission_min'      => 5.0,
             'commission_max'      => 100.0,
             'reverse_charge_mode' => 'pending',
             'enabled_models'      => ['A', 'B', 'C'],
             'onboarding' => [
-                'verify_email_sub'   => 'Willkommen bei Stay4Fair – Bitte подтвердите вашу почту',
+                'verify_email_sub'   => 'Willkommen bei Stay4Fair – Bitte bestätigen Sie Ihre E-Mail-Adresse',
                 'verify_email_body'  => "Hallo {name},\n\nvielen Dank für Ihre Registrierung! Bitte klicken Sie auf den Link unten, um Ihr Konto zu aktivieren:\n{verify_link}\n\nNach der Aktivierung können Sie direkt Ihr erstes Apartment im Dashboard hinzufügen.\n\nIhr Stay4Fair Team",
                 'success_page_title' => 'Fast geschafft!',
-                'success_page_text'  => 'Ihre Registrierung war erfolgreich. Wir haben Ihnen eine E-Mail zur Bestätigung gesendet. Bitte klicken Sie auf den Link in der Nachricht, um Ihr Konto zu aktivieren и получить доступ к добавлению квартир.',
+                'success_page_text'  => 'Ihre Registrierung war erfolgreich. Wir haben Ihnen eine E-Mail zur Bestätigung gesendet. Bitte klicken Sie auf den Link in der Nachricht, um Ihr Konto zu aktivieren und Zugang zum Dashboard zu erhalten.',
             ],
         ];
     }
@@ -41,6 +42,37 @@ final class SettingsStore
             'default'           => self::defaults(),
             'show_in_rest'      => false,
         ]);
+
+        // RU: Регистрируем глобальные шорткоды для вывода на сайте
+        add_shortcode('sf_commission', [$this, 'renderCommissionShortcode']);
+        add_shortcode('sf_vat', [$this, 'renderVatShortcode']);
+    }
+
+    /**
+     * RU: Шорткод [sf_commission].
+     * Можно использовать [sf_commission format="number"] чтобы вывести просто "15" без знака %.
+     */
+    public function renderCommissionShortcode(array|string $atts): string
+    {
+        $atts = is_array($atts) ? shortcode_atts(['format' => 'percent'], $atts) : ['format' => 'percent'];
+        $val = $this->get('commission_default', 0.15);
+        
+        $num = (float)$val * 100;
+        
+        return $atts['format'] === 'number' ? (string)$num : $num . '%';
+    }
+
+    /**
+     * RU: Шорткод [sf_vat].
+     */
+    public function renderVatShortcode(array|string $atts): string
+    {
+        $atts = is_array($atts) ? shortcode_atts(['format' => 'percent'], $atts) : ['format' => 'percent'];
+        $val = $this->get('platform_vat_rate', 19.0);
+        
+        $num = (float)$val;
+        
+        return $atts['format'] === 'number' ? (string)$num : $num . '%';
     }
 
     public function get(string $key, mixed $fallback = null): mixed
@@ -55,14 +87,16 @@ final class SettingsStore
         $onboarding = self::defaults()['onboarding'];
         
         if (isset($input['onboarding']) && is_array($input['onboarding'])) {
-            $onboarding['verify_email_sub']  = sanitize_text_field($input['onboarding']['verify_email_sub']);
-            $onboarding['verify_email_body'] = sanitize_textarea_field($input['onboarding']['verify_email_body']);
+            $onboarding['verify_email_sub']   = sanitize_text_field($input['onboarding']['verify_email_sub'] ?? '');
+            $onboarding['verify_email_body']  = sanitize_textarea_field($input['onboarding']['verify_email_body'] ?? '');
+            $onboarding['success_page_title'] = sanitize_text_field($input['onboarding']['success_page_title'] ?? '');
+            $onboarding['success_page_text']  = sanitize_textarea_field($input['onboarding']['success_page_text'] ?? '');
         }
 
         return [
-            'platform_country'    => sanitize_text_field((string)($input['platform_country'] ?? '')),
+            'platform_country'    => sanitize_text_field((string)($input['platform_country'] ?? 'DE')),
             'base_currency'       => strtoupper(sanitize_text_field((string)($input['base_currency'] ?? 'EUR'))),
-            'platform_vat_rate'   => (float)($input['platform_vat_rate'] ?? 0.0),
+            'platform_vat_rate'   => (float)($input['platform_vat_rate'] ?? 19.0),
             'commission_default'  => (float)($input['commission_default'] ?? 0.15),
             'onboarding'          => $onboarding,
             'enabled_models'      => ['A', 'B', 'C'], // Force-keep for now
