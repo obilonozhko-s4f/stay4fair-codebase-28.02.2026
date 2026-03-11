@@ -1,9 +1,10 @@
 <?php
 /**
  * File: /stay4fair.com/wp-content/plugins/stayflow-core/src/CPT/PropertyMeta.php
- * Version: 1.5.0
+ * Version: 1.6.0
  * RU: Управление мета-полями.
  * - [CRITICAL FIX]: Синхронизация bsbt_owner_id с системным post_author (решает баг невидимости квартир).
+ * - [NEW]: Добавлены поля управления политикой отмены (Синхронизация с формой владельца).
  */
 
 declare(strict_types=1);
@@ -31,9 +32,12 @@ final class PropertyMeta
 
         $communeId    = get_post_meta($post->ID, '_sf_commune_reg_id', true);
         $minStay      = get_post_meta($post->ID, '_sf_min_stay', true);
+        
+        // RU: Берем политики отмены
         $cancelPolicy = get_post_meta($post->ID, '_sf_cancellation_policy', true) ?: 'non_refundable';
         $cancelDays   = get_post_meta($post->ID, '_sf_cancellation_days', true);
-        $fairReturn   = get_post_meta($post->ID, '_sf_fair_return', true);
+        if (!$cancelDays) $cancelDays = 14; // Default if empty
+
         $ownerPrice   = get_post_meta($post->ID, '_sf_selling_price', true) ?: get_post_meta($post->ID, '_sf_owner_price', true);
         
         global $wpdb;
@@ -68,7 +72,14 @@ final class PropertyMeta
 
         <div class="sf-meta-container">
             <div class="sf-meta-grid">
-                <div class="sf-meta-group"><label>Wohnung ID:</label><input type="text" name="sf_commune_reg_id" value="<?php echo esc_attr($communeId); ?>"></div>
+                <div class="sf-meta-group">
+                    <label>Wohnung ID (Reg.-Nr.):</label>
+                    <input type="text" name="sf_commune_reg_id" value="<?php echo esc_attr($communeId); ?>">
+                </div>
+                <div class="sf-meta-group">
+                    <label>Minimum Stay:</label>
+                    <input type="number" name="sf_min_stay" value="<?php echo esc_attr($minStay); ?>" min="1">
+                </div>
                 <div class="sf-meta-group">
                     <label>Базовая цена / Final Price (€):</label>
                     <?php if ($isModelA): ?>
@@ -77,8 +88,36 @@ final class PropertyMeta
                         <input type="text" name="sf_owner_price" value="<?php echo esc_attr($ownerPrice); ?>" required>
                     <?php endif; ?>
                 </div>
-                <div class="sf-meta-group"><label>Minimum Stay:</label><input type="number" name="sf_min_stay" value="<?php echo esc_attr($minStay); ?>" min="1"></div>
             </div>
+
+            <div class="sf-meta-title">Stornierungsbedingungen (Cancellation Policy)</div>
+            <div class="sf-meta-grid">
+                <div class="sf-meta-group">
+                    <label>Typ:</label>
+                    <select name="sf_cancellation_policy" id="sf_cancel_policy_select">
+                        <option value="flexible" <?php selected($cancelPolicy, 'flexible'); ?>>Flexibel (Free Cancellation)</option>
+                        <option value="free_cancellation" <?php selected($cancelPolicy, 'free_cancellation'); ?>>Flexibel (Alternative Key)</option>
+                        <option value="non_refundable" <?php selected($cancelPolicy, 'non_refundable'); ?>>Nicht erstattbar (Non-Refundable)</option>
+                    </select>
+                </div>
+                <div class="sf-meta-group" id="sf_cancel_days_wrapper">
+                    <label>Kostenlos stornierbar bis (Tage vor Anreise):</label>
+                    <input type="number" name="sf_cancellation_days" value="<?php echo esc_attr($cancelDays); ?>" min="1">
+                </div>
+            </div>
+
+            <script>
+                // RU: Скрываем дни, если выбрано non_refundable
+                document.addEventListener('DOMContentLoaded', function() {
+                    var sel = document.getElementById('sf_cancel_policy_select');
+                    var wrap = document.getElementById('sf_cancel_days_wrapper');
+                    function toggleDays() {
+                        wrap.style.display = (sel.value === 'non_refundable') ? 'none' : 'flex';
+                    }
+                    sel.addEventListener('change', toggleDays);
+                    toggleDays();
+                });
+            </script>
             
             <div class="sf-meta-title">Синхронизация / iCal Sync</div>
             <div class="sf-meta-grid">
@@ -103,11 +142,9 @@ final class PropertyMeta
         if (!current_user_can('edit_post', $postId)) return;
 
         // RU: СИНХРОНИЗАЦИЯ АВТОРА / EN: SYNC AUTHOR
-        // Если прилетел bsbt_owner_id, переписываем post_author, чтобы юзер видел квартиру
         if (isset($_POST['bsbt_owner_id'])) {
             $new_author_id = (int)$_POST['bsbt_owner_id'];
             if ($new_author_id > 0 && $post->post_author != $new_author_id) {
-                // Отключаем хук, чтобы не зациклить сохранение
                 remove_action('save_post_mphb_room_type', [$this, 'saveMeta'], 5);
                 wp_update_post(['ID' => $postId, 'post_author' => $new_author_id]);
                 add_action('save_post_mphb_room_type', [$this, 'saveMeta'], 5, 2);
@@ -116,6 +153,23 @@ final class PropertyMeta
 
         if (isset($_POST['sf_commune_reg_id'])) update_post_meta($postId, '_sf_commune_reg_id', sanitize_text_field(wp_unslash($_POST['sf_commune_reg_id'])));
         if (isset($_POST['sf_min_stay'])) update_post_meta($postId, '_sf_min_stay', absint($_POST['sf_min_stay']));
+
+        // RU: СОХРАНЕНИЕ ПОЛИТИК ОТМЕНЫ
+        if (isset($_POST['sf_cancellation_policy'])) {
+            $policy = sanitize_text_field(wp_unslash($_POST['sf_cancellation_policy']));
+            // Нормализуем для базы (переводим flexible в free_cancellation)
+            if ($policy === 'flexible') $policy = 'free_cancellation'; 
+            update_post_meta($postId, '_sf_cancellation_policy', $policy);
+            
+            // Также продублируем в старый ключ для совместимости
+            update_post_meta($postId, 'cancellation_policy', $policy); 
+        }
+        
+        if (isset($_POST['sf_cancellation_days'])) {
+            $days = absint($_POST['sf_cancellation_days']);
+            update_post_meta($postId, '_sf_cancellation_days', $days);
+            update_post_meta($postId, 'cancellation_days', $days); // Дубликат
+        }
         
         if (isset($_POST['sf_ical_import'])) {
             $raw_lines = explode("\n", sanitize_textarea_field(wp_unslash($_POST['sf_ical_import'])));
@@ -156,7 +210,6 @@ final class PropertyMeta
                         }
                         update_post_meta($rate_id, 'mphb_season_prices', array_values($prices_array));
                         
-                        // Безопасное обновление без зацикливания
                         remove_action('save_post_mphb_room_type', [$this, 'saveMeta'], 5);
                         wp_update_post(['ID' => $rate_id]); 
                         add_action('save_post_mphb_room_type', [$this, 'saveMeta'], 5, 2);
