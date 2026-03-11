@@ -90,9 +90,9 @@ final class ApartmentEditProvider
         $adults      = get_post_meta($apt_id, 'mphb_adults_capacity', true) ?: 2;
         $children    = get_post_meta($apt_id, 'mphb_children_capacity', true) ?: 0;
         
-        $bank_name   = get_post_meta($apt_id, 'kontoinhaber', true) ?: get_user_meta($userId, 'sf_bank_kontoinhaber', true);
-        $iban        = get_post_meta($apt_id, 'kontonummer', true) ?: get_user_meta($userId, 'sf_bank_iban', true);
-        $tax_id      = get_post_meta($apt_id, 'steuernummer', true) ?: get_user_meta($userId, 'sf_steuernummer', true);
+       $bank_name   = get_post_meta($apt_id, 'kontoinhaber', true) ?: get_user_meta($userId, 'bsbt_account_holder', true);
+        $iban        = get_post_meta($apt_id, 'kontonummer', true) ?: get_user_meta($userId, 'bsbt_iban', true);
+        $tax_id      = get_post_meta($apt_id, 'steuernummer', true) ?: get_user_meta($userId, 'bsbt_tax_number', true);
 
         // === SECTION: Taxonomies & Galleries ===
         $curr_cats   = wp_get_object_terms($apt_id, 'mphb_room_type_category', ['fields' => 'ids']);
