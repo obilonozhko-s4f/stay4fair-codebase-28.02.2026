@@ -36,7 +36,7 @@ h1 { font-size: 18px; margin: 12px 0 6px 0; color: #082567; border-bottom: 2px s
 
 .data-table { margin-bottom: 20px; border: 1px solid #cbd5e1; }
 .data-table th { background: #082567; color: #E0B849; font-weight: bold; text-align: left; padding: 8px; font-size: 10px; text-transform: uppercase; border-right: 1px solid #cbd5e1; }
-.data-table td { padding: 8px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; font-size: 11px; }
+.data-table td { padding: 8px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; font-size: 11px; vertical-align: top; }
 .data-table tr:nth-child(even) { background: #fdfdfd; }
 .text-right { text-align: right !important; }
 .total-row td { background: #f1f5f9; font-weight: bold; font-size: 13px; border-top: 2px solid #082567; }
@@ -81,37 +81,56 @@ h1 { font-size: 18px; margin: 12px 0 6px 0; color: #082567; border-bottom: 2px s
     <thead>
         <tr>
             <th>ID</th>
-            <th>Apartment</th>
+            <th>Apartment & Adresse</th>
             <th>Check-in / Check-out</th>
             <th class="text-right">Gäste</th>
-            <th class="text-right">Buchungspreis (Brutto)</th>
-            <th class="text-right">S4F Provision</th>
-            <th class="text-right" style="background:#E0B849; color:#082567;">Auszahlung (Netto)</th>
+            <th class="text-right">Buchungspreis<br><span style="font-weight:normal; font-size:8px;">(Brutto)</span></th>
+            <th class="text-right">S4F Provision<br><span style="font-weight:normal; font-size:8px;">(inkl. 19% MwSt)</span></th>
+            <th class="text-right" style="background:#E0B849; color:#082567;">Auszahlung<br><span style="font-weight:normal; font-size:8px;">(Netto)</span></th>
         </tr>
     </thead>
     <tbody>
         <?php foreach ($d['items'] as $item): ?>
             <tr>
                 <td>#<?php echo $e($item['booking_id']); ?></td>
-                <td><?php echo $e($item['apt_title']); ?></td>
+                <td>
+                    <strong><?php echo $e($item['apt_title']); ?></strong><br>
+                    <span style="font-size: 9px; color: #64748b;"><?php echo $e($item['apt_address']); ?></span>
+                </td>
                 <td><?php echo $e(date('d.m.y', strtotime($item['check_in']))); ?> – <?php echo $e(date('d.m.y', strtotime($item['check_out']))); ?></td>
                 <td class="text-right"><?php echo $e($item['guests']); ?></td>
-                <td class="text-right"><?php echo $e($item['guest_gross_total']); ?> €</td>
+                <td class="text-right"><?php echo $e(number_format((float)$item['gross'], 2, ',', '.')); ?> €</td>
                 
-                <?php if ($item['model_key'] === 'model_b'): ?>
-                    <td class="text-right"><?php echo $e(number_format((float)($item['pricing']['commission_gross_total'] ?? 0), 2, ',', '.')); ?> €</td>
+                <?php if ($item['model'] === 'model_b'): ?>
+                    <td class="text-right">
+                        <strong><?php echo $e(number_format((float)$item['prov_gross'], 2, ',', '.')); ?> €</strong><br>
+                        <?php if ((float)$item['prov_gross'] > 0): ?>
+                        <span style="font-size:8px; color:#64748b; font-weight:normal; line-height: 1.2; display: inline-block; margin-top: 3px;">
+                            Netto: <?php echo $e(number_format((float)$item['prov_net'], 2, ',', '.')); ?> €<br>
+                            19% MwSt: <?php echo $e(number_format((float)$item['prov_vat'], 2, ',', '.')); ?> €
+                        </span>
+                        <?php endif; ?>
+                    </td>
                 <?php else: ?>
-                    <td class="text-right">— (Modell A)</td>
+                    <td class="text-right" style="color:#94a3b8;">— (Modell A)</td>
                 <?php endif; ?>
 
-                <td class="text-right highlight"><?php echo $e($item['payout']); ?> €</td>
+                <td class="text-right highlight"><?php echo $e(number_format((float)$item['payout'], 2, ',', '.')); ?> €</td>
             </tr>
         <?php endforeach; ?>
         
         <tr class="total-row">
             <td colspan="4" class="text-right">GESAMT FÜR <?php echo $e($d['month'] . '/' . $d['year']); ?>:</td>
             <td class="text-right"><?php echo $e(number_format((float)$d['total_gross'], 2, ',', '.')); ?> €</td>
-            <td class="text-right"><?php echo $e(number_format((float)$d['total_prov'], 2, ',', '.')); ?> €</td>
+            <td class="text-right">
+                <?php echo $e(number_format((float)$d['total_prov'], 2, ',', '.')); ?> €<br>
+                <?php if ($d['total_prov'] > 0): ?>
+                <span style="font-size:8px; color:#64748b; font-weight:normal;">
+                    Netto: <?php echo $e(number_format((float)$d['total_prov_net'], 2, ',', '.')); ?> €<br>
+                    19% MwSt: <?php echo $e(number_format((float)$d['total_prov_vat'], 2, ',', '.')); ?> €
+                </span>
+                <?php endif; ?>
+            </td>
             <td class="text-right" style="color: #082567;"><?php echo $e(number_format((float)$d['total_net'], 2, ',', '.')); ?> €</td>
         </tr>
     </tbody>
