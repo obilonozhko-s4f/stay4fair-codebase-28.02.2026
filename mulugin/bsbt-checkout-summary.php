@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: BSBT – Checkout Summary (FINAL & UNIFIED CODE V12 - GALLERY SLUG FIX + CANCELLATION + 2x2 LAYOUT)
- * Description: Dynamic summary card for Booking Checkout page (MotoPress Hotel Booking) using Session Storage to carry data, guaranteeing display of Apartment Type and Guests, and removing Reservation ID display.
+ * Description: Dynamic summary card for Booking Checkout page. Includes Dynamic Model A/B VAT detection via AJAX, exact Snapshot math rounding, and English Price Breakdown.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -16,13 +16,35 @@ add_shortcode( 'bsbt_checkout_summary', 'bsbt_checkout_summary_render' );
 add_action( 'wp_ajax_bsbt_get_room_gallery_by_slug', 'bsbt_get_room_gallery_by_slug' );
 add_action( 'wp_ajax_nopriv_bsbt_get_room_gallery_by_slug', 'bsbt_get_room_gallery_by_slug' );
 
-// AJAX FUNCTION REMAINS UNCHANGED (Code integrity check)
 function bsbt_get_room_gallery_by_slug() {
     if ( empty( $_POST['slug'] ) ) { wp_die(); }
     $slug = sanitize_title( wp_unslash( $_POST['slug'] ) );
     $room_type = get_page_by_path( $slug, OBJECT, 'mphb_room_type' );
     if ( ! $room_type ) { wp_die(); }
     $room_type_id = $room_type->ID;
+    
+    // --- ПЕРЕДАЕМ МОДЕЛЬ И НАЛОГИ ВМЕСТЕ С ГАЛЕРЕЕЙ С ЗАЩИТОЙ ДРОБЕЙ ---
+    $sf_settings = get_option( 'stayflow_core_settings', [] );
+    
+    $vat_rate_a = isset($sf_settings['platform_vat_rate_a']) ? (float)$sf_settings['platform_vat_rate_a'] : 7.0;
+    if ($vat_rate_a > 0.0 && $vat_rate_a <= 1.0) $vat_rate_a *= 100; // Превращаем 0.07 в 7
+    
+    $vat_rate_b = isset($sf_settings['platform_vat_rate']) ? (float)$sf_settings['platform_vat_rate'] : 19.0;
+    if ($vat_rate_b > 0.0 && $vat_rate_b <= 1.0) $vat_rate_b *= 100;
+    
+    $commission = isset($sf_settings['commission_default']) ? (float)$sf_settings['commission_default'] : 15.0;
+    if ($commission > 0.0 && $commission <= 1.0) $commission *= 100;
+    
+    $model = 'A'; 
+    $m_meta = get_post_meta( $room_type_id, '_bsbt_business_model', true );
+    if ( $m_meta ) {
+        $model = strtoupper( str_replace( 'model_', '', $m_meta ) );
+    }
+
+    // Скрытый блок с данными для JS
+    echo '<div id="bsbt-ajax-model-data" data-model="'.esc_attr($model).'" data-vat-a="'.esc_attr($vat_rate_a).'" data-vat-b="'.esc_attr($vat_rate_b).'" data-comm="'.esc_attr($commission).'" style="display:none;"></div>';
+
+    // Галерея
     $image_ids = array();
     if ( has_post_thumbnail( $room_type_id ) ) {
         $image_ids[] = get_post_thumbnail_id( $room_type_id );
@@ -101,22 +123,25 @@ function bsbt_checkout_summary_render() {
     $is_step_checkout = ! isset( $_GET['step'] ); 
     $is_step_booking  = isset( $_GET['step'] ) && $_GET['step'] === 'booking'; 
     
-    // --- 1. ШАГ 1: ПОЛУЧАЕМ ДАННЫЕ ИЗ $_REQUEST
+    // --- 1. ШАГ 1: БЕЗОПАСНО ПОЛУЧАЕМ ДАННЫЕ 
     if ( $is_step_checkout ) {
-        $check_in_raw  = isset( $_REQUEST['mphb_check_in_date'] ) ? sanitize_text_field( $_REQUEST['mphb_check_in_date'] ) : '';
-        $check_out_raw = isset( $_REQUEST['mphb_check_out_date'] ) ? sanitize_text_field( $_REQUEST['mphb_check_out_date'] ) : '';
-
+        if ( isset( $_REQUEST['mphb_check_in_date'] ) ) {
+            $check_in_raw = sanitize_text_field( $_REQUEST['mphb_check_in_date'] );
+        }
+        if ( isset( $_REQUEST['mphb_check_out_date'] ) ) {
+            $check_out_raw = sanitize_text_field( $_REQUEST['mphb_check_out_date'] );
+        }
         if ( isset( $_REQUEST['mphb_room_details'] ) && is_array( $_REQUEST['mphb_room_details'] ) ) {
             $first_details = reset( $_REQUEST['mphb_room_details'] );
             if ( isset( $first_details['room_type_id'] ) ) {
                 $room_type_id = absint( $first_details['room_type_id'] );
             }
-            $adults   = isset( $first_details['adults'] ) ? (int) $first_details['adults'] : 0;
-            $children = isset( $first_details['children'] ) ? (int) $first_details['children'] : 0;
+            if ( isset( $first_details['adults'] ) ) $adults = (int) $first_details['adults'];
+            if ( isset( $first_details['children'] ) ) $children = (int) $first_details['children'];
         }
     }
 
-    // --- 2. ШАГ 2: ПОПЫТКА ВОССТАНОВЛЕНИЯ ДАННЫХ ИЗ БАЗЫ (ТОЛЬКО ДАТЫ)
+    // --- 2. ШАГ 2: ПОПЫТКА ВОССТАНОВЛЕНИЯ ДАННЫХ ИЗ БАЗЫ БРОНИ
     if ( $is_step_booking ) {
         if ( isset( $_GET['booking_id'] ) ) {
             $booking_id = absint( $_GET['booking_id'] );
@@ -136,9 +161,28 @@ function bsbt_checkout_summary_render() {
         }
     }
     
-    // --- 3. РАБОТА С ТИПОМ НОМЕРА, ДАТАМИ И ГОСТЯМИ (Форматирование)
+    // --- 3. РАБОТА С ТИПОМ НОМЕРА И МОДЕЛЬЮ А/В
     if ( $room_type_id ) {
         $room_type_post = get_post( $room_type_id );
+    }
+
+    $sf_settings = get_option( 'stayflow_core_settings', [] );
+    
+    $vat_rate_a = isset($sf_settings['platform_vat_rate_a']) ? (float)$sf_settings['platform_vat_rate_a'] : 7.0;
+    if ($vat_rate_a > 0.0 && $vat_rate_a <= 1.0) $vat_rate_a *= 100;
+    
+    $vat_rate_b = isset($sf_settings['platform_vat_rate']) ? (float)$sf_settings['platform_vat_rate'] : 19.0;
+    if ($vat_rate_b > 0.0 && $vat_rate_b <= 1.0) $vat_rate_b *= 100;
+    
+    $commission = isset($sf_settings['commission_default']) ? (float)$sf_settings['commission_default'] : 15.0;
+    if ($commission > 0.0 && $commission <= 1.0) $commission *= 100;
+    
+    $model = 'A'; 
+    if ( $room_type_id ) {
+        $m_meta = get_post_meta( $room_type_id, '_bsbt_business_model', true );
+        if ( $m_meta ) {
+            $model = strtoupper( str_replace( 'model_', '', $m_meta ) );
+        }
     }
 
     $check_in  = $check_in_raw  ? DateTime::createFromFormat( 'Y-m-d', $check_in_raw )  : null;
@@ -164,12 +208,10 @@ function bsbt_checkout_summary_render() {
         $guests_str = implode( ', ', $parts );
     }
 
-    // --- 4. ДОБАВЛЕНИЕ СКРЫТЫХ ПОЛЕЙ
     $apartment_title = $room_type_post ? esc_html( $room_type_post->post_title ) : '—'; 
     $apartment_id    = $room_type_post ? absint( $room_type_post->ID ) : 0;
     $total_guests    = $adults + $children;
 
-    // --- 4.1. ТИП ПОЛИТИКИ ОТМЕНЫ (ИЗ META _bsbt_cancel_policy_type)
     $policy_type = $room_type_id ? get_post_meta( $room_type_id, '_bsbt_cancel_policy_type', true ) : '';
     if ( empty( $policy_type ) ) {
         $policy_type = 'nonref';
@@ -184,17 +226,20 @@ function bsbt_checkout_summary_render() {
         <input type="hidden" id="booking_guests_hidden" name="booking_guests" value="' . esc_attr( $total_guests ) . '">
         <input type="hidden" id="apartment_id_hidden" name="apartment_id" value="' . esc_attr( $apartment_id ) . '">
         <input type="hidden" id="apartment_title_hidden" name="apartment_title" value="' . esc_attr( $apartment_title ) . '">
-        
         <input type="hidden" id="booking_price_field" name="booking_price" value="">
     ';
 
-    // --- 5. РЕНДЕРИНГ HTML КАРТОЧКИ
     ob_start();
     ?>
     <div class="bsbt-checkout-summary"
         data-booking-id="<?php echo esc_attr( $booking_id ?: '' ); ?>"
         data-room-slug="<?php echo esc_attr( $room_type_post ? $room_type_post->post_name : '' ); ?>"
-        data-is-step-booking="<?php echo $is_step_booking ? 'true' : 'false'; ?>"> 
+        data-is-step-booking="<?php echo $is_step_booking ? 'true' : 'false'; ?>"
+        data-model="<?php echo esc_attr( $model ); ?>"
+        data-vat-a="<?php echo esc_attr( $vat_rate_a ); ?>"
+        data-vat-b="<?php echo esc_attr( $vat_rate_b ); ?>"
+        data-comm="<?php echo esc_attr( $commission ); ?>"> 
+        
         <div class="bsbt-checkout-summary-card">
             <div class="bsbt-summary-photo-gallery"></div>
             <h3 class="bsbt-summary-title">Your reservation</h3>
@@ -231,9 +276,12 @@ function bsbt_checkout_summary_render() {
                 </p>
             </div>
 
-            <div class="bsbt-summary-row bsbt-summary-total-row">
-                <span class="bsbt-summary-label">Total</span>
-                <span class="bsbt-summary-total-amount"><?php echo esc_html( $total_price ); ?></span>
+            <div class="bsbt-summary-row bsbt-summary-total-row" style="flex-direction:column; align-items:flex-start;">
+                <div style="display:flex; justify-content:space-between; width:100%;">
+                    <span class="bsbt-summary-label">Total</span>
+                    <span class="bsbt-summary-total-amount"><?php echo esc_html( $total_price ); ?></span>
+                </div>
+                <a href="javascript:void(0);" onclick="bsbtOpenPriceDetails()" style="font-size:12px; color:#082567; text-decoration:underline; align-self:flex-end; margin-top:6px;">Price Breakdown</a>
             </div>
 
             <p class="bsbt-summary-row bsbt-summary-policy">
@@ -243,23 +291,121 @@ function bsbt_checkout_summary_render() {
                 </span>
             </p>
 
-            <p class="bsbt-summary-note">
-                All prices include 7% VAT and City Tax where applicable<br>
+            <p class="bsbt-summary-note" id="bsbt-dynamic-legal-text">
+                <?php if ( $model === 'B' ) : ?>
+                    The total amount includes the Stay4Fair service fee incl. <?php echo esc_html($vat_rate_b); ?>% VAT. The City Tax may be payable directly to the host. The contracting party for the accommodation is the respective property owner.
+                <?php else : ?>
+                    The total amount includes the statutory VAT of <?php echo esc_html($vat_rate_a); ?>% on accommodation services as well as the City Tax. The contracting party is Stay4Fair.com.
+                <?php endif; ?>
+                <br><br>
                 No charge will be made at this step. Your card will be temporarily authorized to secure the booking. 
-    Payment is only captured after confirmation.
+                Payment is only captured after confirmation.
             </p>
         </div>
+
+        <div id="bsbt-price-popup" class="bsbt-price-popup" style="display:none;">
+            <div class="bsbt-price-popup-inner">
+                <span class="bsbt-price-popup-close" onclick="bsbtClosePriceDetails()">&times;</span>
+                <h4 style="margin-top:0; margin-bottom:15px; color:#082567; font-size:18px;">Price Breakdown</h4>
+                <div id="bsbt-price-breakdown-content"></div>
+            </div>
+        </div>
     </div>
+
     <script>
+    window.bsbtOpenPriceDetails = function() {
+        document.getElementById('bsbt-price-popup').style.display = 'flex';
+    };
+    window.bsbtClosePriceDetails = function() {
+        document.getElementById('bsbt-price-popup').style.display = 'none';
+    };
+
     document.addEventListener('DOMContentLoaded', function () {
         var ajaxUrl = '<?php echo esc_js( $ajax_url ); ?>';
         var summaryCard = document.querySelector('.bsbt-checkout-summary');
         var isStepBooking = summaryCard.getAttribute('data-is-step-booking') === 'true';
         var SESSION_KEY = 'bsbt_booking_summary_data';
 
-        var saveSummaryData; // Defined later
+        var saveSummaryData; 
 
-        // === 3) APARTMENT TITLE + LINK + GALLERY
+        // --- БРОНЕБОЙНЫЙ ПАРСЕР ВАЛЮТЫ ---
+        function parseMotoPressPrice(rawText) {
+            var s = rawText.replace(/[^\d.,]/g, '');
+            if (!s) return 0;
+            var lastSep = Math.max(s.lastIndexOf(','), s.lastIndexOf('.'));
+            if (lastSep === -1) return parseFloat(s);
+            
+            var hasComma = s.indexOf(',') > -1;
+            var hasDot = s.indexOf('.') > -1;
+            
+            if (hasComma && hasDot) {
+                s = s.replace(/[,.]/g, function(match, offset) {
+                    return offset === lastSep ? '.' : '';
+                });
+                return parseFloat(s);
+            } else {
+                var parts = s.split(s[lastSep]);
+                var lastPart = parts[parts.length - 1];
+                if (lastPart.length === 2 || lastPart.length === 1) {
+                    s = s.replace(/[,.]/g, '.');
+                } else {
+                    s = s.replace(/[,.]/g, '');
+                }
+                return parseFloat(s);
+            }
+        }
+
+        // --- ДИНАМИЧЕСКИЙ РАСЧЕТ КАК В SNAPSHOT.PHP ---
+        function updatePriceBreakdown(parsedTotal) {
+            var total = parseFloat(parsedTotal);
+            if (isNaN(total) || total <= 0) return;
+            
+            var model = summaryCard.getAttribute('data-model') || 'A';
+            var vatA = parseFloat(summaryCard.getAttribute('data-vat-a')) || 7.0;
+            var vatB = parseFloat(summaryCard.getAttribute('data-vat-b')) || 19.0;
+            var comm = parseFloat(summaryCard.getAttribute('data-comm')) || 15.0;
+            
+            var content = '';
+            var formatCurrency = function(val) {
+                return '€' + val.toFixed(2);
+            };
+
+            if (model === 'A') {
+                // Математика Модели А
+                var vatAmount = Math.round((total - (total / (1 + (vatA / 100)))) * 100) / 100;
+                
+                content += '<div class="bsbt-bd-row"><span>Accommodation (incl. City Tax):</span><span>' + formatCurrency(total) + '</span></div>';
+                content += '<div class="bsbt-bd-row bsbt-bd-sub"><span>includes ' + vatA + '% VAT:</span><span>' + formatCurrency(vatAmount) + '</span></div>';
+                content += '<div class="bsbt-bd-row bsbt-bd-total"><span>Total Price:</span><span>' + formatCurrency(total) + '</span></div>';
+            } else {
+                // Точная математика Модели В из Snapshot
+                var commission_gross = Math.round((total * (comm / 100)) * 100) / 100;
+                var commission_net = Math.round((commission_gross / (1 + (vatB / 100))) * 100) / 100;
+                var commission_vat = Math.round((commission_gross - commission_net) * 100) / 100;
+                var hostPayout = Math.round((total - commission_gross) * 100) / 100;
+                
+                content += '<div class="bsbt-bd-row"><span>Accommodation:</span><span>' + formatCurrency(hostPayout) + '</span></div>';
+                content += '<div class="bsbt-bd-row"><span>Stay4Fair Service Fee:</span><span>' + formatCurrency(commission_gross) + '</span></div>';
+                content += '<div class="bsbt-bd-row bsbt-bd-sub"><span>includes ' + vatB + '% VAT:</span><span>' + formatCurrency(commission_vat) + '</span></div>';
+                content += '<div class="bsbt-bd-row bsbt-bd-total"><span>Total Price:</span><span>' + formatCurrency(total) + '</span></div>';
+            }
+            
+            var bdContainer = document.getElementById('bsbt-price-breakdown-content');
+            if (bdContainer) bdContainer.innerHTML = content;
+        }
+
+        function updateLegalText(model, vatA, vatB) {
+            var noteElement = document.getElementById('bsbt-dynamic-legal-text');
+            if (!noteElement) return;
+            var baseText = "";
+            if (model === 'B') {
+                baseText = "The total amount includes the Stay4Fair service fee incl. " + vatB + "% VAT. The City Tax may be payable directly to the host. The contracting party for the accommodation is the respective property owner.";
+            } else {
+                baseText = "The total amount includes the statutory VAT of " + vatA + "% on accommodation services as well as the City Tax. The contracting party is Stay4Fair.com.";
+            }
+            noteElement.innerHTML = baseText + "<br><br>No charge will be made at this step. Your card will be temporarily authorized to secure the booking. Payment is only captured after confirmation.";
+        }
+
         function bsbtEnsureLightbox() {
             var existing = document.querySelector('.bsbt-photo-lightbox');
             if (existing) { return existing; }
@@ -301,13 +447,9 @@ function bsbt_checkout_summary_render() {
             return overlay;
         }
         
-        // **********************************************
-        // ********** KEY FIX APPLIED HERE **************
-        // **********************************************
         function initApartmentAndGallery() {
             var slug = summaryCard.getAttribute('data-room-slug');
 
-            // FIX: На Шаге 2, если slug пуст, принудительно берем его из сессии
             if (!slug && isStepBooking) {
                 try {
                     var storedData = sessionStorage.getItem(SESSION_KEY);
@@ -315,18 +457,14 @@ function bsbt_checkout_summary_render() {
                        var data = JSON.parse(storedData);
                        slug = data.roomSlug;
                        if (slug) {
-                           // ПРИНУДИТЕЛЬНО УСТАНАВЛИВАЕМ SLUG В DOM
                            summaryCard.setAttribute('data-room-slug', slug); 
-                           console.log('BSBT Gallery: Recovered slug from session:', slug);
                        } else {
-                           console.warn('BSBT Gallery: Slug missing from session data.');
-                           return; // Выходим, если slug не найден даже в сессии
+                           return; 
                        }
                     }
-                } catch(e) { /* silent fail */ }
+                } catch(e) { }
             }
             
-            // Фолбэк для Шага 1 (если PHP не сработал): пытаемся получить slug из ссылки
             if (!slug) {
                 var srcLink = document.querySelector('.mphb-room-type-title a');
                 if (!srcLink) return;
@@ -343,7 +481,6 @@ function bsbt_checkout_summary_render() {
                 } catch (e) { slug = ''; }
                 if (slug) {
                     summaryCard.setAttribute('data-room-slug', slug); 
-                    // Если нашли на Шаге 1, сохраняем, чтобы он был в сессии
                     if (typeof saveSummaryData === 'function' && !isStepBooking) {
                         saveSummaryData();
                     }
@@ -352,7 +489,6 @@ function bsbt_checkout_summary_render() {
                 }
             }
 
-
             var gallery = summaryCard.querySelector('.bsbt-summary-photo-gallery');
             if (!gallery) return;
             
@@ -360,7 +496,7 @@ function bsbt_checkout_summary_render() {
             formData.append('action', 'bsbt_get_room_gallery_by_slug');
             formData.append('slug', slug);
             
-            gallery.innerHTML = '<div style="text-align:center; padding: 20px;">Loading photos...</div>'; // Placeholder
+            gallery.innerHTML = '<div style="text-align:center; padding: 20px;">Loading photos...</div>';
             
             fetch(ajaxUrl, {
                 method: 'POST',
@@ -373,12 +509,32 @@ function bsbt_checkout_summary_render() {
                     return;
                 }
                 gallery.innerHTML = html;
+                
+                // РАСПАРСИВАЕМ ДАННЫЕ О МОДЕЛИ ИЗ AJAX-ОТВЕТА И ОБНОВЛЯЕМ КАРТОЧКУ
+                var modelData = gallery.querySelector('#bsbt-ajax-model-data');
+                if (modelData) {
+                    var fModel = modelData.getAttribute('data-model');
+                    var fVatA = modelData.getAttribute('data-vat-a');
+                    var fVatB = modelData.getAttribute('data-vat-b');
+                    var fComm = modelData.getAttribute('data-comm');
+
+                    summaryCard.setAttribute('data-model', fModel);
+                    summaryCard.setAttribute('data-vat-a', fVatA);
+                    summaryCard.setAttribute('data-vat-b', fVatB);
+                    summaryCard.setAttribute('data-comm', fComm);
+
+                    updateLegalText(fModel, fVatA, fVatB);
+
+                    var targetField = document.getElementById('booking_price_field');
+                    if (targetField && targetField.value) {
+                        updatePriceBreakdown(targetField.value);
+                    }
+                }
+
                 initGalleryArrows(gallery);
                 initGalleryLightbox(gallery);
-                console.log('BSBT Gallery: Gallery successfully loaded for slug:', slug);
             })
             .catch(function (error) { 
-                console.error('BSBT Gallery AJAX error:', error); 
                 gallery.innerHTML = '<div style="text-align:center; padding: 20px; color: red;">Error loading photos.</div>';
             });
             
@@ -429,17 +585,11 @@ function bsbt_checkout_summary_render() {
                 });
             }
         }
-        // **********************************************
         
-        // ===============================================
-        // --- 1) TOTAL PRICE + SESSION LOGIC ---
-        // ===============================================
-
         (function sessionAndPriceSync() {
             var targetField = document.getElementById('booking_price_field');
             var visiblePriceElement = summaryCard.querySelector('.bsbt-summary-total-amount');
 
-            // --- A. ФУНКЦИЯ ДЛЯ СОХРАНЕНИЯ ДАННЫХ В СЕССИИ (ИСПОЛЬЗУЕТСЯ НА ШАГЕ 1) ---
             saveSummaryData = function() {
                 if (!visiblePriceElement || visiblePriceElement.textContent.trim() === '—') return;
                 
@@ -452,31 +602,25 @@ function bsbt_checkout_summary_render() {
                     nights: summaryCard.querySelector('.bsbt-summary-nights').textContent.trim() || '—',
                     totalPriceDisplay: visiblePriceElement.textContent.trim() || '—',
                     totalPriceRaw: targetField.value.trim() || '',
-                    // FIX: Гарантируем, что slug сохраняется
-                    roomSlug: summaryCard.getAttribute('data-room-slug') || '' 
+                    roomSlug: summaryCard.getAttribute('data-room-slug') || '',
+                    
+                    model: summaryCard.getAttribute('data-model') || 'A',
+                    vatA: summaryCard.getAttribute('data-vat-a') || 7,
+                    vatB: summaryCard.getAttribute('data-vat-b') || 19,
+                    comm: summaryCard.getAttribute('data-comm') || 15
                 };
 
                 try {
                     sessionStorage.setItem(SESSION_KEY, JSON.stringify(data));
-                    console.log('BSBT Session: Data successfully saved from Step 1, including slug:', data.roomSlug);
-                } catch (e) {
-                    console.error('BSBT Session: Failed to save data to session storage.', e);
-                }
+                } catch (e) { }
             }
 
-            // --- B. ФУНКЦИЯ ДЛЯ ЗАГРУЗКИ ДАННЫХ ИЗ СЕССИИ (ИСПОЛЬЗУЕТСЯ НА ШАГЕ 2) ---
             function loadSummaryData() {
                 try {
                     var storedData = sessionStorage.getItem(SESSION_KEY);
-                    if (!storedData) {
-                        console.warn('BSBT Session: No data found in session storage.');
-                        return;
-                    }
+                    if (!storedData) { return; }
                     var data = JSON.parse(storedData);
                     
-                    // Обновляем HTML-элементы на Шаге 2 - ПРИНУДИТЕЛЬНО
-                    
-                    // Apartment Title & Link
                     if (data.apartmentTitle && data.apartmentTitle !== '—') {
                         summaryCard.querySelector('.bsbt-summary-apartment-title').textContent = data.apartmentTitle;
                     }
@@ -484,7 +628,6 @@ function bsbt_checkout_summary_render() {
                         summaryCard.querySelector('.bsbt-summary-apartment-link').setAttribute('href', data.apartmentLink);
                     }
                     
-                    // Даты, ночи, гости, цена
                     summaryCard.querySelector('.bsbt-summary-checkin').textContent = data.checkin;
                     summaryCard.querySelector('.bsbt-summary-checkout').textContent = data.checkout;
                     summaryCard.querySelector('.bsbt-summary-nights').textContent = data.nights;
@@ -500,18 +643,25 @@ function bsbt_checkout_summary_render() {
                         targetField.value = data.totalPriceRaw;
                     }
                     
-                    // FIX: Обновляем Slug для галереи, если он есть в сессии
+                    if (data.model) summaryCard.setAttribute('data-model', data.model);
+                    if (data.vatA) summaryCard.setAttribute('data-vat-a', data.vatA);
+                    if (data.vatB) summaryCard.setAttribute('data-vat-b', data.vatB);
+                    if (data.comm) summaryCard.setAttribute('data-comm', data.comm);
+
+                    if (data.model) {
+                        updateLegalText(data.model, data.vatA, data.vatB);
+                    }
+
+                    if (data.totalPriceRaw) {
+                        updatePriceBreakdown(data.totalPriceRaw);
+                    }
+                    
                     if (data.roomSlug) {
                          summaryCard.setAttribute('data-room-slug', data.roomSlug);
                     }
-                    
-                    console.log('BSBT Session: Data successfully loaded onto Step 2. Loaded slug:', data.roomSlug);
-                } catch (e) {
-                    console.error('BSBT Session: Failed to load data from session storage.', e);
-                }
+                } catch (e) { }
             }
 
-            // --- C. OBSERVER ДЛЯ ШАГА 1: НАХОДИМ ЦЕНУ И СОХРАНЯЕМ ЕЕ ---
             if (!isStepBooking) {
                 var containerToObserve = document.getElementById('mphb-price-details') || document.querySelector('.mphb-room-price-breakdown-wrapper') || document.body;
                 
@@ -531,27 +681,24 @@ function bsbt_checkout_summary_render() {
                             rawPriceText = foundPriceContainer.textContent.trim();
                             
                             if (/\d/.test(rawPriceText)) {
-                                var priceText = rawPriceText.replace(/[^0-9.,]/g, '').replace(',', '.');
-                                targetField.value = priceText.trim();
+                                
+                                var parsedVal = parseMotoPressPrice(rawPriceText);
+                                targetField.value = parsedVal;
                                 
                                 if(visiblePriceElement) {
                                     visiblePriceElement.textContent = rawPriceText; 
                                 }
+
+                                updatePriceBreakdown(parsedVal);
                                 
-                                // FIX: Сначала запускаем галерею (чтобы получить slug, если его нет)
                                 initApartmentAndGallery(); 
-                                
-                                // Главное: сохраняем данные в сессию ПОСЛЕ попытки получить slug
                                 saveSummaryData();
-                                
                                 observer.disconnect(); 
-                                console.log('BSBT Price Observer: Price found and session data saved from ' + priceSelectors[i] + ' on Step 1.');
                                 
                                 var checkoutForm = document.querySelector('.mphb-checkout-form');
                                 if(checkoutForm) {
                                        checkoutForm.addEventListener('submit', saveSummaryData);
                                 }
-                                
                                 return true;
                             }
                         }
@@ -560,9 +707,7 @@ function bsbt_checkout_summary_render() {
                 }
 
                 var observer = new MutationObserver(function(mutations, obs) {
-                    if (handlePriceFound()) {
-                        return;
-                    }
+                    if (handlePriceFound()) { return; }
                 });
 
                 var config = { childList: true, subtree: true, characterData: true, attributes: true };
@@ -570,16 +715,12 @@ function bsbt_checkout_summary_render() {
                 handlePriceFound();
                 
             } else {
-                // --- D. ЛОГИКА ШАГА 2: ЗАГРУЖАЕМ ИЗ СЕССИИ И ЗАПУСКАЕМ ГАЛЕРЕЮ
                 loadSummaryData();
-                // FIX: Запускаем галерею ПОСЛЕ загрузки данных из сессии, которые могут содержать slug
                 initApartmentAndGallery(); 
             }
 
         })();
 
-
-        // --- 2) GUESTS LIVE UPDATE (Обновлено для принудительного сохранения)
         (function guestsLiveUpdate() {
             var guestsTarget = summaryCard.querySelector('.bsbt-summary-guests');
             if (!summaryCard.getAttribute('data-booking-id') && guestsTarget && guestsTarget.textContent.trim() === '—') {
@@ -611,36 +752,23 @@ function bsbt_checkout_summary_render() {
     </script>
 
     <style>
-        /* 2-в-ряд для Check-in/Check-out и Nights/Guests */
-        .bsbt-summary-row-group {
-            display: flex;
-            justify-content: space-between;
-            gap: 16px;
-            margin-bottom: 8px;
-        }
-        .bsbt-summary-row-group .bsbt-summary-row {
-            width: 50%;
-            margin-bottom: 0;
-        }
+        .bsbt-summary-row-group { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 8px; }
+        .bsbt-summary-row-group .bsbt-summary-row { width: 50%; margin-bottom: 0; }
 
         @media (max-width: 768px) {
-            .bsbt-summary-row-group {
-                flex-direction: column;
-                gap: 6px;
-            }
-            .bsbt-summary-row-group .bsbt-summary-row {
-                width: 100%;
-            }
+            .bsbt-summary-row-group { flex-direction: column; gap: 6px; }
+            .bsbt-summary-row-group .bsbt-summary-row { width: 100%; }
         }
 
-        /* Cancellation – спокойный текст, как note */
-        .bsbt-summary-policy-text {
-            font-family: "Manrope", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            font-size: 13px;
-            font-weight: 400;
-            color: #444;
-            line-height: 1.4;
-        }
+        .bsbt-summary-policy-text { font-family: "Manrope", system-ui, sans-serif; font-size: 13px; color: #444; line-height: 1.4; }
+
+        .bsbt-price-popup { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; display: flex; align-items: center; justify-content: center; }
+        .bsbt-price-popup-inner { background: #fff; padding: 24px; border-radius: 12px; width: 90%; max-width: 400px; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        .bsbt-price-popup-close { position: absolute; top: 12px; right: 18px; font-size: 26px; cursor: pointer; color: #94a3b8; transition: color 0.2s; }
+        .bsbt-price-popup-close:hover { color: #dc2626; }
+        .bsbt-bd-row { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px; color: #334155; }
+        .bsbt-bd-sub { font-size: 12px; color: #64748b; margin-top: -6px; margin-bottom: 12px; }
+        .bsbt-bd-total { font-weight: bold; font-size: 16px; border-top: 1px solid #e2e8f0; padding-top: 12px; margin-top: 12px; color: #082567; }
     </style>
     <?php
 
