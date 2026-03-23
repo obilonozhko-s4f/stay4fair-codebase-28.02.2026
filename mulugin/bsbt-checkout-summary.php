@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: BSBT – Checkout Summary (FINAL & UNIFIED CODE V12 - GALLERY SLUG FIX + CANCELLATION + 2x2 LAYOUT)
- * Description: Dynamic summary card for Booking Checkout page. Includes Dynamic Model A/B VAT detection via AJAX, exact Snapshot math rounding, and English Price Breakdown.
+ * Description: Dynamic summary card for Booking Checkout page. Includes Dynamic Model A/B VAT detection via AJAX, exact Snapshot math rounding, and English Price Breakdown. Updated City Tax text.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -27,7 +27,7 @@ function bsbt_get_room_gallery_by_slug() {
     $sf_settings = get_option( 'stayflow_core_settings', [] );
     
     $vat_rate_a = isset($sf_settings['platform_vat_rate_a']) ? (float)$sf_settings['platform_vat_rate_a'] : 7.0;
-    if ($vat_rate_a > 0.0 && $vat_rate_a <= 1.0) $vat_rate_a *= 100; // Превращаем 0.07 в 7
+    if ($vat_rate_a > 0.0 && $vat_rate_a <= 1.0) $vat_rate_a *= 100; 
     
     $vat_rate_b = isset($sf_settings['platform_vat_rate']) ? (float)$sf_settings['platform_vat_rate'] : 19.0;
     if ($vat_rate_b > 0.0 && $vat_rate_b <= 1.0) $vat_rate_b *= 100;
@@ -293,7 +293,7 @@ function bsbt_checkout_summary_render() {
 
             <p class="bsbt-summary-note" id="bsbt-dynamic-legal-text">
                 <?php if ( $model === 'B' ) : ?>
-                    The total amount includes the Stay4Fair service fee incl. <?php echo esc_html($vat_rate_b); ?>% VAT. The City Tax may be payable directly to the host. The contracting party for the accommodation is the respective property owner.
+                    The total amount includes the Stay4Fair service fee incl. <?php echo esc_html($vat_rate_b); ?>% VAT. City Tax is included in the price for private apartments; however, commercial hotels may charge it separately upon arrival. The contracting party for the accommodation is the respective property owner.
                 <?php else : ?>
                     The total amount includes the statutory VAT of <?php echo esc_html($vat_rate_a); ?>% on accommodation services as well as the City Tax. The contracting party is Stay4Fair.com.
                 <?php endif; ?>
@@ -328,7 +328,6 @@ function bsbt_checkout_summary_render() {
 
         var saveSummaryData; 
 
-        // --- БРОНЕБОЙНЫЙ ПАРСЕР ВАЛЮТЫ ---
         function parseMotoPressPrice(rawText) {
             var s = rawText.replace(/[^\d.,]/g, '');
             if (!s) return 0;
@@ -355,7 +354,6 @@ function bsbt_checkout_summary_render() {
             }
         }
 
-        // --- ДИНАМИЧЕСКИЙ РАСЧЕТ КАК В SNAPSHOT.PHP ---
         function updatePriceBreakdown(parsedTotal) {
             var total = parseFloat(parsedTotal);
             if (isNaN(total) || total <= 0) return;
@@ -371,14 +369,12 @@ function bsbt_checkout_summary_render() {
             };
 
             if (model === 'A') {
-                // Математика Модели А
                 var vatAmount = Math.round((total - (total / (1 + (vatA / 100)))) * 100) / 100;
                 
                 content += '<div class="bsbt-bd-row"><span>Accommodation (incl. City Tax):</span><span>' + formatCurrency(total) + '</span></div>';
                 content += '<div class="bsbt-bd-row bsbt-bd-sub"><span>includes ' + vatA + '% VAT:</span><span>' + formatCurrency(vatAmount) + '</span></div>';
                 content += '<div class="bsbt-bd-row bsbt-bd-total"><span>Total Price:</span><span>' + formatCurrency(total) + '</span></div>';
             } else {
-                // Точная математика Модели В из Snapshot
                 var commission_gross = Math.round((total * (comm / 100)) * 100) / 100;
                 var commission_net = Math.round((commission_gross / (1 + (vatB / 100))) * 100) / 100;
                 var commission_vat = Math.round((commission_gross - commission_net) * 100) / 100;
@@ -399,7 +395,7 @@ function bsbt_checkout_summary_render() {
             if (!noteElement) return;
             var baseText = "";
             if (model === 'B') {
-                baseText = "The total amount includes the Stay4Fair service fee incl. " + vatB + "% VAT. The City Tax may be payable directly to the host. The contracting party for the accommodation is the respective property owner.";
+                baseText = "The total amount includes the Stay4Fair service fee incl. " + vatB + "% VAT. City Tax is included in the price for private apartments; however, commercial hotels may charge it separately upon arrival. The contracting party for the accommodation is the respective property owner.";
             } else {
                 baseText = "The total amount includes the statutory VAT of " + vatA + "% on accommodation services as well as the City Tax. The contracting party is Stay4Fair.com.";
             }
@@ -510,7 +506,6 @@ function bsbt_checkout_summary_render() {
                 }
                 gallery.innerHTML = html;
                 
-                // РАСПАРСИВАЕМ ДАННЫЕ О МОДЕЛИ ИЗ AJAX-ОТВЕТА И ОБНОВЛЯЕМ КАРТОЧКУ
                 var modelData = gallery.querySelector('#bsbt-ajax-model-data');
                 if (modelData) {
                     var fModel = modelData.getAttribute('data-model');
