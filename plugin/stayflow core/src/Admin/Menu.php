@@ -12,9 +12,9 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * Version: 2.13.0
- * RU: Управление меню. Полный рабочий файл (восстановлена версия 2.3.0 + Finance Hub).
- * EN: Menu management. Full working file (restored v2.3.0 + Finance Hub).
+ * Version: 2.14.0
+ * RU: Управление меню. Добавлены поля для редактирования Contracting Party (Модели A/B).
+ * EN: Menu management. Added fields for Contracting Party (Models A/B).
  */
 final class Menu
 {
@@ -98,7 +98,7 @@ final class Menu
         $link = ($module['key'] === 'owners') ? 'admin.php?page=stayflow-owners' : (($module['key'] === 'finance') ? 'admin.php?page=stayflow-finance' : $module['link']);
         $url = $isClickable ? admin_url($link) : '#';
         
-        // RU: Спец-дизайн заголовка для Finance / EN: Special title design for Finance
+        // RU: Спец-дизайн заголовка для Finance
         $titleHtml = esc_html($module['title']);
         if ($module['key'] === 'finance') {
             $titleHtml = '<span style="font-weight:800; color:#000;">Finance</span><span style="background:#ff9000; color:#000; padding:2px 6px; border-radius:4px; margin-left:5px; font-weight:900;">Taxes</span>';
@@ -109,7 +109,7 @@ final class Menu
     }
 
     // =========================================================================
-    // 2. СЕТТИНГИ (Из твоей оригинальной версии 2.3.0)
+    // 2. СЕТТИНГИ
     // =========================================================================
     public function renderSettings(): void
     {
@@ -161,7 +161,7 @@ final class Menu
     }
 
     // =========================================================================
-    // 3. ПОЛИТИКИ ОТМЕНЫ (Policies)
+    // 3. ПОЛИТИКИ ОТМЕНЫ
     // =========================================================================
     public function renderPolicies(): void
     {
@@ -208,14 +208,19 @@ final class Menu
         $options = get_option($optKey, []);
         
         $def_voucher = "<strong>Check-in:</strong> ab 15:00 Uhr<br /><strong>Check-out:</strong> bis 11:00 Uhr<br /><br />Bitte kontaktieren Sie Ihren Gastgeber vorab bezüglich der Schlüsselübergabe.";
-        
         $def_tax_single = "<p>Die Auszahlung erfolgt in der Regel innerhalb von 3–7 Werktagen nach Abreise des Gastes.</p>\n<p>Wir freuen uns über Ihre erfolgreichen Buchungen! Bitte beachten Sie, dass die erzielten Einkünfte aus der kurzfristigen Vermietung steuerpflichtig sind. Die Verantwortung für die korrekte Versteuerung sowie die Einhaltung aller steuerlichen Meldepflichten liegt gemäß den gesetzlichen Vorgaben beim Vermieter.</p>\n<p>Ein besonderer Hinweis zum Beherbergungsteuer (City Tax): Bitte prüfen Sie eigenständig die lokalen Satzungen Ihrer Stadt. In vielen Regionen sind Vermieter verpflichtet, diese Steuer ordnungsgemäß zu erfassen und abzuführen. Da die Handhabung je nach Aufenthaltszweck (geschäftlich oder privat) variieren kann, liegt die finale Prüfung und Abwicklung ausschließlich in Ihrer Hand.</p>\n<p>Stay4Fair unterstützt Sie mit der Bereitstellung der Buchungsdaten, übernimmt jedoch keine steuerliche Beratung oder Haftung.</p>";
-
         $def_tax_monthly = "<p>Die Auszahlung erfolgt in der Regel innerhalb von 3–7 Werktagen nach Abreise des Gastes.</p>\n\n<p><strong>Für Buchungen nach Modell A (Direkt):</strong> Die Abführung der Beherbergungsteuer (City-Tax) für diese Buchungen wurde von Stay4Fair übernommen. Für die Versteuerung Ihrer Einkünfte sind Sie selbst verantwortlich.</p>\n\n<p><strong>Für Buchungen nach Modell B (Vermittlung):</strong> Bitte beachten Sie, dass die erzielten Einkünfte aus der kurzfristigen Vermietung steuerpflichtig sind. Die Verantwortung für die korrekte Versteuerung sowie die Einhaltung aller steuerlichen Meldepflichten liegt beim Vermieter. Bitte prüfen Sie eigenständig die lokalen Satzungen bezüglich Beherbergungssteuer (City Tax).</p>\n\n<p><strong>Stay4Fair unterstützt Sie mit der Bereitstellung der Buchungsdaten, übernimmt jedoch keine steuerliche Beratung oder Haftung.</strong></p>";
+        
+        // RU: Новые дефолтные тексты для шорткода Contracting Party
+        $def_cp_a = "The contracting party is Stay4Fair.com. This property is managed by our professional partner.";
+        $def_cp_b = "The contracting party for the accommodation is the respective property owner. Stay4Fair acts as an authorized intermediary.";
 
         $voucher_text = !empty($options['voucher_instructions']) ? $options['voucher_instructions'] : $def_voucher;
         $tax_single   = !empty($options['tax_notice_single']) ? $options['tax_notice_single'] : $def_tax_single;
         $tax_monthly  = !empty($options['tax_notice_monthly']) ? $options['tax_notice_monthly'] : $def_tax_monthly;
+        
+        $cp_a = !empty($options['contract_party_text_a']) ? $options['contract_party_text_a'] : $def_cp_a;
+        $cp_b = !empty($options['contract_party_text_b']) ? $options['contract_party_text_b'] : $def_cp_b;
 
         ?>
         <div class="wrap stayflow-admin-wrap">
@@ -226,6 +231,18 @@ final class Menu
                 <?php settings_fields('stayflow_content_group'); ?>
                 <div class="sf-settings-grid">
                     
+                    <div class="sf-settings-card">
+                        <h3>🤝 Contracting Party: Modell A (Stay4Fair)</h3>
+                        <div class="sf-hint" style="margin-bottom: 15px; padding: 10px; background: #f8fafc; border-left: 3px solid #082567;">Dieser Text wird auf der Apartment-Seite im Block "Contracting Party" (bei Stay4Fair/Modell A Apartments) angezeigt.</div>
+                        <?php wp_editor($cp_a, 'cp_text_a_editor', ['textarea_name' => $optKey . '[contract_party_text_a]', 'media_buttons' => false, 'textarea_rows' => 4, 'tinymce' => true]); ?>
+                    </div>
+
+                    <div class="sf-settings-card">
+                        <h3>🤝 Contracting Party: Modell B (Owner)</h3>
+                        <div class="sf-hint" style="margin-bottom: 15px; padding: 10px; background: #f8fafc; border-left: 3px solid #E0B849;">Dieser Text wird auf der Apartment-Seite im Block "Contracting Party" (bei Owner/Modell B Apartments) angezeigt.</div>
+                        <?php wp_editor($cp_b, 'cp_text_b_editor', ['textarea_name' => $optKey . '[contract_party_text_b]', 'media_buttons' => false, 'textarea_rows' => 4, 'tinymce' => true]); ?>
+                    </div>
+
                     <div class="sf-settings-card">
                         <h3>📄 Dokument: Gast-Voucher (PDF) | Abschnitt: Check-in / Check-out Anweisungen</h3>
                         <div class="sf-hint" style="margin-bottom: 15px; padding: 10px; background: #f8fafc; border-left: 3px solid #082567;">Dieser Text wird auf dem generierten Gast-Voucher (PDF) angezeigt.</div>
