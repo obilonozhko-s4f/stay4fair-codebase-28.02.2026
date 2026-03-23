@@ -12,8 +12,8 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * Version: 1.4.0
- * RU: Модификатор инвойсов. Берет динамические настройки из StayFlow Settings.
+ * Version: 1.6.3
+ * RU: Модификатор инвойсов. Дисклеймер перенесен строго под таблицу PAYMENT_INFO (Payment details).
  */
 final class InvoiceModifier
 {
@@ -38,7 +38,6 @@ final class InvoiceModifier
         );
     }
 
-    // RU: Получаем динамические настройки ядра
     private static function getSettings(): array
     {
         $settings = get_option('stayflow_core_settings', []);
@@ -192,11 +191,10 @@ final class InvoiceModifier
         $html = $vars['BOOKING_DETAILS'];
         $gross = (float)$booking->getTotalPrice();
         
-        // RU: Подтягиваем настройки
         $s = self::getSettings();
 
+        // 1. Модифицируем таблицу BOOKING_DETAILS (добавляем НДС и комиссии)
         if ($model === 'model_b') {
-
             $snapFee = get_post_meta($bookingId, '_bsbt_snapshot_fee_gross_total', true);
             $snapVat = get_post_meta($bookingId, '_bsbt_snapshot_fee_vat_total', true);
 
@@ -220,24 +218,19 @@ final class InvoiceModifier
             }
 
             if ($vat > 0) {
-                // RU: Динамический текст НДС. Убираем .0 если число целое (например 19%)
-                $vatPercent = fmod($s['vat_b_raw'], 1) == 0 ? (int)$s['vat_b_raw'] : round($s['vat_b_raw'], 1);
-                
+                $vatPercent = fmod((float)$s['vat_b_raw'], 1) == 0 ? (int)$s['vat_b_raw'] : round((float)$s['vat_b_raw'], 1);
                 $html = self::insertRowBeforeTotal(
                     $html,
                     "incl. Service Fee VAT ({$vatPercent}%)",
                     mphb_format_price($vat)
                 );
             }
-
         } else {
             // Модель A
             $vat = round($gross - ($gross / (1 + $s['vat_a'])), 2);
 
             if ($vat > 0) {
-                // Динамический текст НДС для Модели А
-                $vatPercent = fmod($s['vat_a_raw'], 1) == 0 ? (int)$s['vat_a_raw'] : round($s['vat_a_raw'], 1);
-                
+                $vatPercent = fmod((float)$s['vat_a_raw'], 1) == 0 ? (int)$s['vat_a_raw'] : round((float)$s['vat_a_raw'], 1);
                 $html = self::insertRowBeforeTotal(
                     $html,
                     "VAT ({$vatPercent}%) included",
@@ -246,7 +239,33 @@ final class InvoiceModifier
             }
         }
 
-        $vars['BOOKING_DETAILS'] = self::addTableRadius($html);
+        $vars['BOOKING_DETAILS'] = $html;
+
+        // 2. Формируем юридический текст-дисклеймер
+        $disclaimerText = '';
+        if ($model === 'model_b') {
+            $vatPercentB = fmod((float)$s['vat_b_raw'], 1) == 0 ? (int)$s['vat_b_raw'] : round((float)$s['vat_b_raw'], 1);
+            $disclaimerText .= '<strong style="color:#212F54; font-size:13px;">Contracting Party: The Property Owner</strong><br><br>';
+            $disclaimerText .= 'Stay4Fair acts solely as an intermediary (booking agent) for this reservation. The direct contracting party for the accommodation is the property owner. The total amount includes the Stay4Fair service fee (incl. ' . $vatPercentB . '% VAT).<br><br>';
+            $disclaimerText .= '<em>Please note:</em> The accommodation portion of the price may not include VAT if the owner is a private individual or a small business (Kleinunternehmer). If the accommodation is a hotel or a VAT-registered business, please request a separate tax invoice directly from them for the accommodation part. City Tax may apply and is to be settled directly with the host unless otherwise stated.';
+        } else {
+            $vatPercentA = fmod((float)$s['vat_a_raw'], 1) == 0 ? (int)$s['vat_a_raw'] : round((float)$s['vat_a_raw'], 1);
+            $disclaimerText .= '<strong style="color:#212F54; font-size:13px;">Contracting Party: Stay4Fair.com</strong><br><br>';
+            $disclaimerText .= 'Stay4Fair acts as the merchant of record and direct contracting party for this accommodation service. The total amount includes the statutory VAT (' . $vatPercentA . '%) on accommodation services and the applicable City Tax. Stay4Fair.com is responsible for remitting these taxes to the respective authorities. If you require a VAT invoice for business purposes, this document serves as your official receipt.';
+        }
+
+        // Строгий квадратный блок отдельной таблицей
+        $disclaimerHtml = '<br><table style="width:100%; border-collapse:collapse;"><tr><td style="padding:15px; border:1px solid #D3D7E0; font-size:11px; color:#555; line-height:1.5; text-align:left;">' . $disclaimerText . '</td></tr></table>';
+
+        // 3. ДОБАВЛЯЕМ ДИСКЛЕЙМЕР ПОД PAYMENT_INFO
+        if (isset($vars['PAYMENT_INFO'])) {
+            $vars['PAYMENT_INFO'] .= $disclaimerHtml;
+        } elseif (isset($vars['PAYMENT_DETAILS'])) {
+            $vars['PAYMENT_DETAILS'] .= $disclaimerHtml;
+        } else {
+            // Фолбэк, если блока оплат вдруг нет в шаблоне
+            $vars['BOOKING_DETAILS'] .= $disclaimerHtml;
+        }
 
         return $vars;
     }
@@ -282,32 +301,6 @@ final class InvoiceModifier
             $tr->appendChild($th);
             $tr->appendChild($td);
             $target->parentNode->insertBefore($tr, $target);
-        }
-
-        $html = $dom->saveHTML();
-        $html = preg_replace('~^.*?<body>(.*)</body>.*$~is', '$1', $html);
-        return $html ?: $html;
-    }
-
-    private static function addTableRadius(string $html): string
-    {
-        if (!class_exists('DOMDocument')) return $html;
-
-        $dom = new DOMDocument('1.0', 'UTF-8');
-        libxml_use_internal_errors(true);
-        $dom->loadHTML('<html><body>' . $html . '</body></html>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
-        $xpath = new DOMXPath($dom);
-        $tables = $xpath->query("//table");
-
-        if ($tables) {
-            foreach ($tables as $table) {
-                if (!$table instanceof \DOMElement) continue;
-                $style = $table->getAttribute('style');
-                if (stripos($style, 'border-radius') === false) {
-                    $style .= '; border-radius:10px; overflow:hidden; border-collapse:separate;';
-                    $table->setAttribute('style', trim($style));
-                }
-            }
         }
 
         $html = $dom->saveHTML();
