@@ -12,8 +12,8 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * Version: 1.6.3
- * RU: Модификатор инвойсов. Дисклеймер перенесен строго под таблицу PAYMENT_INFO (Payment details).
+ * Version: 1.6.4
+ * RU: Модификатор инвойсов. Обновлены тексты про City Tax (включено для частников, отдельно для отелей).
  */
 final class InvoiceModifier
 {
@@ -247,11 +247,12 @@ final class InvoiceModifier
             $vatPercentB = fmod((float)$s['vat_b_raw'], 1) == 0 ? (int)$s['vat_b_raw'] : round((float)$s['vat_b_raw'], 1);
             $disclaimerText .= '<strong style="color:#212F54; font-size:13px;">Contracting Party: The Property Owner</strong><br><br>';
             $disclaimerText .= 'Stay4Fair acts solely as an intermediary (booking agent) for this reservation. The direct contracting party for the accommodation is the property owner. The total amount includes the Stay4Fair service fee (incl. ' . $vatPercentB . '% VAT).<br><br>';
-            $disclaimerText .= '<em>Please note:</em> The accommodation portion of the price may not include VAT if the owner is a private individual or a small business (Kleinunternehmer). If the accommodation is a hotel or a VAT-registered business, please request a separate tax invoice directly from them for the accommodation part. City Tax may apply and is to be settled directly with the host unless otherwise stated.';
+            $disclaimerText .= '<em>Please note:</em> The accommodation portion of the price may not include VAT if the owner is a private individual or a small business (Kleinunternehmer). If the accommodation is a hotel or a VAT-registered business, please request a separate tax invoice directly from them for the accommodation part. City Tax is included in the price for private apartments; however, commercial hotels may charge it separately upon arrival.';
         } else {
             $vatPercentA = fmod((float)$s['vat_a_raw'], 1) == 0 ? (int)$s['vat_a_raw'] : round((float)$s['vat_a_raw'], 1);
             $disclaimerText .= '<strong style="color:#212F54; font-size:13px;">Contracting Party: Stay4Fair.com</strong><br><br>';
-            $disclaimerText .= 'Stay4Fair acts as the merchant of record and direct contracting party for this accommodation service. The total amount includes the statutory VAT (' . $vatPercentA . '%) on accommodation services and the applicable City Tax. Stay4Fair.com is responsible for remitting these taxes to the respective authorities. If you require a VAT invoice for business purposes, this document serves as your official receipt.';
+            $disclaimerText .= 'Stay4Fair acts as the merchant of record and direct service provider for this accommodation booking. 
+Stay4Fair provides the accommodation service in its own name and on its own account. The total amount includes the statutory VAT (' . $vatPercentA . '%) on accommodation services as well as the City Tax. Stay4Fair.com is responsible for remitting these taxes to the respective authorities. If you require a VAT invoice for business purposes, this document serves as your official receipt.';
         }
 
         // Строгий квадратный блок отдельной таблицей
