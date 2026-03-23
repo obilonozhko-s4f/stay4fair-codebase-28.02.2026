@@ -90,7 +90,10 @@ final class Kernel
         if (class_exists('\StayFlow\CPT\OwnerProfileHandler')) {
             (new \StayFlow\CPT\OwnerProfileHandler())->register();
         }
-
+// Добавить в список инициализации (измененный сегмент)
+if (class_exists('\StayFlow\Integration\ContractingPartyShortcode')) {
+    (new \StayFlow\Integration\ContractingPartyShortcode())->register();
+}
         // =========================================================
         // RU: ИНИЦИАЛИЗАЦИЯ ИНВОЙСОВ
         // EN: INVOICES INITIALIZATION
