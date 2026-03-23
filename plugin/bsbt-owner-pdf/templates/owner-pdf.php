@@ -123,7 +123,6 @@ h1 {
     · Dokumenttyp: <?php echo $e($d['document_type']); ?>
 </div>
 
-<!-- Apartment -->
 <div class="box">
     <div class="label">Apartment</div>
     <div class="value">
@@ -138,7 +137,6 @@ h1 {
     </div>
 </div>
 
-<!-- Zeitraum -->
 <div class="box">
     <div class="label">Zeitraum</div>
     <div class="value">
@@ -149,7 +147,6 @@ h1 {
     </div>
 </div>
 
-<!-- Gast -->
 <div class="box">
     <div class="label">Gast / Rechnungskontakt</div>
     <div class="note">
@@ -163,7 +160,6 @@ h1 {
     </div>
 </div>
 
-<!-- Brutto price (ONLY Model B) -->
 <?php if ($model_key === 'model_b') : ?>
 <div class="box">
     <div class="label">Brutto-Buchungspreis (Gast)</div>
@@ -173,13 +169,11 @@ h1 {
 </div>
 <?php endif; ?>
 
-<!-- Auszahlung -->
 <div class="box">
     <div class="label">Auszahlung an Vermieter</div>
     <div class="value"><?php echo $e($d['payout']); ?> €</div>
 </div>
 
-<!-- Provision -->
 <?php if (!empty($d['pricing'])) : ?>
 <div class="box">
     <div class="label">Provision & Vermittlungsgebühr</div>
@@ -192,17 +186,18 @@ h1 {
 </div>
 <?php endif; ?>
 
-<!-- Steuer Hinweis -->
 <div class="box">
-    <div class="label">Auszahlung & steuerliche Hinweise</div>
+    <div class="label">Vertrags- & Steuerinformationen</div>
     <div class="note">
-        Die Auszahlung erfolgt in der Regel innerhalb von 3–7 Werktagen nach Abreise des Gastes.<br><br>
-
-        Wir freuen uns über Ihre erfolgreichen Buchungen! Bitte beachten Sie, dass die erzielten Einkünfte aus der kurzfristigen Vermietung steuerpflichtig sind. Die Verantwortung für die korrekte Versteuerung sowie die Einhaltung aller steuerlichen Meldepflichten liegt gemäß den gesetzlichen Vorgaben beim Vermieter.<br><br>
-
-        Ein besonderer Hinweis zum Beherbergungsteuer (City Tax): Bitte prüfen Sie eigenständig die lokalen Satzungen Ihrer Stadt. In vielen Regionen sind Vermieter verpflichtet, diese Steuer ordnungsgemäß zu erfassen und abzuführen. Da die Handhabung je nach Aufenthaltszweck (geschäftlich oder privat) variieren kann, liegt die finale Prüfung und Abwicklung ausschließlich in Ihrer Hand.<br><br>
-
-        Stay4Fair unterstützt Sie mit der Bereitstellung der Buchungsdaten, übernimmt jedoch keine steuerliche Beratung oder Haftung.
+        <?php if ($model_key === 'model_b') : ?>
+            <strong>Geschäftsmodell B (Vermittlung)</strong><br>
+            Sie (der Eigentümer) sind der direkte Vertragspartner des Gastes für die Beherbergungsleistung. Stay4Fair.com handelt ausschließlich als Vermittler. Die in dieser Abrechnung ausgewiesene Stay4Fair Service-Gebühr enthält die gesetzliche MwSt. von 19%. Die ordnungsgemäße Versteuerung der Beherbergungsleistung sowie ggf. die Abführung der Beherbergungsteuer an die Kommune obliegt Ihnen als Gastgeber.
+        <?php else : ?>
+            <strong>Geschäftsmodell A (Eigengeschäft / Merchant of Record)</strong><br>
+            Stay4Fair.com tritt bei dieser Buchung als direkter Vertragspartner des Gastes auf. Wir erwerben die Beherbergungsleistung von Ihnen zum vereinbarten Netto-Auszahlungsbetrag und veräußern diese an den Gast weiter. Die Abführung der gesetzlichen Mehrwertsteuer auf den Gastpreis sowie der Beherbergungsteuer obliegt Stay4Fair.com. <em>Bitte beachten Sie jedoch, dass Sie für die ordnungsgemäße Versteuerung Ihrer generierten Einkünfte (Auszahlungsbetrag) weiterhin selbst verantwortlich sind.</em>
+        <?php endif; ?>
+        <br><br>
+        Die Auszahlung erfolgt in der Regel innerhalb von 3–7 Werktagen nach Abreise des Gastes. Stay4Fair übernimmt keine steuerliche Beratung oder Haftung.
     </div>
 </div>
 
