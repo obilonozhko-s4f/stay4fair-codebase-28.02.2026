@@ -33,9 +33,33 @@ if (!empty($d['guest_country'])) {
 }
 
 $guest_address = implode('<br>', array_map($e, $guest_address_lines));
-$owner_name = !empty($d['owner_name']) ? $d['owner_name'] : '—';
+$owner_name    = !empty($d['owner_name']) ? $d['owner_name'] : '—';
+$model_key     = $d['model_key'] ?? '';
 
-$model_key = $d['model_key'] ?? '';
+$is_model_b = ($model_key === 'model_b');
+
+/* ============================= */
+/* Dynamic wording by model */
+/* ============================= */
+
+$document_title = $is_model_b
+    ? 'Buchungsbestätigung (Vermittlung) – #'
+    : 'Leistungsabrechnung / Buchungsbestätigung – #';
+
+$compensation_label = $is_model_b
+    ? 'Vergütung an Vermieter'
+    : 'Vereinbarter Einkaufspreis / Vergütung';
+
+$tax_contract_text = $is_model_b
+    ? '<strong style="color:#212F54;">Geschäftsmodell B (Vermittlung)</strong><br>
+       Sie (der Eigentümer / Gastgeber) sind der direkte Vertragspartner des Gastes für die Beherbergungsleistung. Stay4Fair.com handelt bei dieser Buchung ausschließlich als Vermittler. Die in dieser Abrechnung ausgewiesene Service- bzw. Vermittlungsgebühr von Stay4Fair enthält – soweit ausgewiesen – die gesetzliche Umsatzsteuer von 19 %. Die ordnungsgemäße Versteuerung der Beherbergungsleistung sowie gegebenenfalls die Abführung kommunaler Beherbergungsabgaben obliegt Ihnen als Gastgeber.'
+    : '<strong style="color:#212F54;">Geschäftsmodell A (Eigengeschäft / Merchant of Record)</strong><br>
+       Stay4Fair.com tritt bei dieser Buchung als direkter Vertragspartner des Gastes und Merchant of Record auf. Stay4Fair erwirbt die Beherbergungsleistung von Ihnen zu dem individuell vereinbarten Einkaufspreis und veräußert diese im eigenen Namen an den Gast weiter. Die Abführung der gesetzlichen Umsatzsteuer auf den Gastpreis sowie gegebenenfalls der kommunalen Beherbergungsabgabe obliegt Stay4Fair.com. <em>Hinweis: Unabhängig hiervon bleibt die steuerliche Behandlung der Ihnen von Stay4Fair gezahlten Vergütung in Ihrem eigenen steuerlichen Verantwortungsbereich.</em>';
+
+$settlement_text = $is_model_b
+    ? 'Die Abrechnung und Auszahlung an Sie erfolgt in der Regel innerhalb von 3–7 Werktagen nach dem maßgeblichen Abrechnungszeitpunkt gemäß den vereinbarten Bedingungen. Für die korrekte steuerliche Behandlung Ihrer Einnahmen, die Einhaltung gesetzlicher Meldepflichten sowie etwaige lokale Abgaben sind ausschließlich Sie verantwortlich. Stay4Fair übernimmt hierfür keine Haftung und erbringt keine steuerliche oder rechtliche Beratung.'
+    : 'Die Abrechnung und Zahlung des vereinbarten Einkaufspreises bzw. der Vergütung erfolgt in der Regel innerhalb von 3–7 Werktagen nach dem maßgeblichen Abrechnungszeitpunkt gemäß den vereinbarten Bedingungen. Für die korrekte steuerliche Behandlung der von Stay4Fair an Sie gezahlten Vergütung sowie für die Einhaltung Ihrer eigenen gesetzlichen Melde- und Erklärungspflichten sind ausschließlich Sie verantwortlich. Stay4Fair übernimmt hierfür keine Haftung und erbringt keine steuerliche oder rechtliche Beratung.';
+
 ?>
 <!doctype html>
 <html lang="de">
@@ -50,11 +74,18 @@ body {
     line-height: 1.45;
 }
 
-table { border-collapse: collapse; width: 100%; }
+table {
+    border-collapse: collapse;
+    width: 100%;
+}
 
-.header td { vertical-align: top; }
+.header td {
+    vertical-align: top;
+}
 
-.logo img { height: 36px; }
+.logo img {
+    height: 36px;
+}
 
 .contact {
     text-align: right;
@@ -103,20 +134,20 @@ h1 {
 <body>
 
 <table class="header">
-<tr>
-    <td class="logo">
-        <img src="<?php echo $e($logo); ?>" alt="Stay4Fair">
-    </td>
-    <td class="contact">
-        <strong>Stay4Fair.com</strong><br>
-        Tel / WhatsApp: +49 176 24615269<br>
-        E-Mail: business@stay4fair.com<br>
-        Owner Portal: stay4fair.com/owner-login/
-    </td>
-</tr>
+    <tr>
+        <td class="logo">
+            <img src="<?php echo $e($logo); ?>" alt="Stay4Fair">
+        </td>
+        <td class="contact">
+            <strong>Stay4Fair.com</strong><br>
+            Tel / WhatsApp: +49 176 24615269<br>
+            E-Mail: business@stay4fair.com<br>
+            Owner Portal: stay4fair.com/owner-login/
+        </td>
+    </tr>
 </table>
 
-<h1>Buchungsbestätigung (Besitzer) – #<?php echo $e($d['booking_id']); ?></h1>
+<h1><?php echo $e($document_title . ($d['booking_id'] ?? '')); ?></h1>
 
 <div class="subline">
     Business Model: <strong><?php echo $e($d['business_model']); ?></strong>
@@ -133,7 +164,7 @@ h1 {
     </div>
     <div class="note" style="margin-top:6px">
         Adresse: <?php echo $e($d['apt_address']); ?><br>
-        Vermieter: <strong><?php echo $e($owner_name); ?></strong>
+        Vermieter / Ansprechpartner: <strong><?php echo $e($owner_name); ?></strong>
     </div>
 </div>
 
@@ -160,7 +191,7 @@ h1 {
     </div>
 </div>
 
-<?php if ($model_key === 'model_b') : ?>
+<?php if ($is_model_b) : ?>
 <div class="box">
     <div class="label">Brutto-Buchungspreis (Gast)</div>
     <div class="value">
@@ -170,11 +201,11 @@ h1 {
 <?php endif; ?>
 
 <div class="box">
-    <div class="label">Auszahlung an Vermieter</div>
+    <div class="label"><?php echo $e($compensation_label); ?></div>
     <div class="value"><?php echo $e($d['payout']); ?> €</div>
 </div>
 
-<?php if (!empty($d['pricing'])) : ?>
+<?php if ($is_model_b && !empty($d['pricing'])) : ?>
 <div class="box">
     <div class="label">Provision & Vermittlungsgebühr</div>
     <div class="note">
@@ -189,18 +220,15 @@ h1 {
 <div class="box">
     <div class="label">Vertrags-, Steuer- & Stornierungsinformationen</div>
     <div class="note">
-        <?php if ($model_key === 'model_b') : ?>
-            <strong style="color:#212F54;">Geschäftsmodell B (Vermittlung)</strong><br>
-            Sie (der Eigentümer) sind der direkte Vertragspartner des Gastes für die Beherbergungsleistung. Stay4Fair.com handelt ausschließlich als Vermittler. Die in dieser Abrechnung ausgewiesene Stay4Fair Service-Gebühr enthält die gesetzliche MwSt. von 19%. Die ordnungsgemäße Versteuerung der Beherbergungsleistung sowie ggf. die Abführung der Beherbergungsteuer an die Kommune obliegt Ihnen als Gastgeber.
-        <?php else : ?>
-            <strong style="color:#212F54;">Geschäftsmodell A (Eigengeschäft / Merchant of Record)</strong><br>
-            Stay4Fair.com tritt bei dieser Buchung als direkter Vertragspartner des Gastes auf. Wir erwerben die Beherbergungsleistung von Ihnen zum vereinbarten Netto-Auszahlungsbetrag und veräußern diese an den Gast weiter. Die Abführung der gesetzlichen Mehrwertsteuer auf den Gastpreis sowie der Beherbergungsteuer obliegt Stay4Fair.com. <em>Wichtiger Hinweis: Dies befreit Sie jedoch nicht von der Pflicht, Ihre erzielten Einkünfte (den Auszahlungsbetrag) im Rahmen Ihrer eigenen Steuererklärung (z. B. Einkommensteuer) ordnungsgemäß anzugeben.</em>
-        <?php endif; ?>
+        <?php echo $tax_contract_text; ?>
         <br><br>
-        <strong style="color:#212F54;">Auszahlung & Allgemeine steuerliche Hinweise:</strong><br>
-        Die Auszahlung an Sie erfolgt in der Regel innerhalb von 3–7 Werktagen nach der Anreise bzw. Abreise des Gastes (gemäß den vereinbarten Bedingungen). Wir weisen ausdrücklich darauf hin, dass Einkünfte aus der (kurzfristigen) Vermietung steuerpflichtig sind. Die Verantwortung für die korrekte Versteuerung sowie die Einhaltung aller gesetzlichen und steuerlichen Meldepflichten liegt vollumfänglich beim Vermieter. Stay4Fair übernimmt hierfür keine Haftung und bietet keine steuerliche Beratung an.<br><br>
+
+        <strong style="color:#212F54;">Abrechnung / steuerliche Hinweise:</strong><br>
+        <?php echo $settlement_text; ?>
+        <br><br>
+
         <strong style="color:#dc2626;">Wichtiger Hinweis zu Stornierungen & Ablehnungen:</strong><br>
-        Verbindliche Buchungen sind durch den Gastgeber zwingend zu erfüllen. Bitte beachten Sie, dass eine ungerechtfertigte Ablehnung, Nichtbereitstellung der Unterkunft oder eine nachträgliche Stornierung einer bereits bestätigten Buchung durch Sie als Eigentümer zu erheblichen Ausfallkosten, Umbuchungsgebühren für den Gast sowie vertraglichen Straf- und Schadensersatzforderungen führen kann.
+        Verbindlich bestätigte Buchungen sind durch den Gastgeber bzw. Leistungserbringer ordnungsgemäß zu erfüllen. Eine ungerechtfertigte Ablehnung, Nichtbereitstellung der Unterkunft oder eine nachträgliche Stornierung einer bereits bestätigten Buchung kann zu erheblichen Ausfallkosten, Umbuchungsgebühren, vertraglichen Sanktionen sowie Schadensersatzansprüchen führen.
     </div>
 </div>
 
