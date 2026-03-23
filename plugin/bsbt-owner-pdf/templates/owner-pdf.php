@@ -187,17 +187,20 @@ h1 {
 <?php endif; ?>
 
 <div class="box">
-    <div class="label">Vertrags- & Steuerinformationen</div>
+    <div class="label">Vertrags-, Steuer- & Stornierungsinformationen</div>
     <div class="note">
         <?php if ($model_key === 'model_b') : ?>
-            <strong>Geschäftsmodell B (Vermittlung)</strong><br>
+            <strong style="color:#212F54;">Geschäftsmodell B (Vermittlung)</strong><br>
             Sie (der Eigentümer) sind der direkte Vertragspartner des Gastes für die Beherbergungsleistung. Stay4Fair.com handelt ausschließlich als Vermittler. Die in dieser Abrechnung ausgewiesene Stay4Fair Service-Gebühr enthält die gesetzliche MwSt. von 19%. Die ordnungsgemäße Versteuerung der Beherbergungsleistung sowie ggf. die Abführung der Beherbergungsteuer an die Kommune obliegt Ihnen als Gastgeber.
         <?php else : ?>
-            <strong>Geschäftsmodell A (Eigengeschäft / Merchant of Record)</strong><br>
-            Stay4Fair.com tritt bei dieser Buchung als direkter Vertragspartner des Gastes auf. Wir erwerben die Beherbergungsleistung von Ihnen zum vereinbarten Netto-Auszahlungsbetrag und veräußern diese an den Gast weiter. Die Abführung der gesetzlichen Mehrwertsteuer auf den Gastpreis sowie der Beherbergungsteuer obliegt Stay4Fair.com. <em>Bitte beachten Sie jedoch, dass Sie für die ordnungsgemäße Versteuerung Ihrer generierten Einkünfte (Auszahlungsbetrag) weiterhin selbst verantwortlich sind.</em>
+            <strong style="color:#212F54;">Geschäftsmodell A (Eigengeschäft / Merchant of Record)</strong><br>
+            Stay4Fair.com tritt bei dieser Buchung als direkter Vertragspartner des Gastes auf. Wir erwerben die Beherbergungsleistung von Ihnen zum vereinbarten Netto-Auszahlungsbetrag und veräußern diese an den Gast weiter. Die Abführung der gesetzlichen Mehrwertsteuer auf den Gastpreis sowie der Beherbergungsteuer obliegt Stay4Fair.com. <em>Wichtiger Hinweis: Dies befreit Sie jedoch nicht von der Pflicht, Ihre erzielten Einkünfte (den Auszahlungsbetrag) im Rahmen Ihrer eigenen Steuererklärung (z. B. Einkommensteuer) ordnungsgemäß anzugeben.</em>
         <?php endif; ?>
         <br><br>
-        Die Auszahlung erfolgt in der Regel innerhalb von 3–7 Werktagen nach Abreise des Gastes. Stay4Fair übernimmt keine steuerliche Beratung oder Haftung.
+        <strong style="color:#212F54;">Auszahlung & Allgemeine steuerliche Hinweise:</strong><br>
+        Die Auszahlung an Sie erfolgt in der Regel innerhalb von 3–7 Werktagen nach der Anreise bzw. Abreise des Gastes (gemäß den vereinbarten Bedingungen). Wir weisen ausdrücklich darauf hin, dass Einkünfte aus der (kurzfristigen) Vermietung steuerpflichtig sind. Die Verantwortung für die korrekte Versteuerung sowie die Einhaltung aller gesetzlichen und steuerlichen Meldepflichten liegt vollumfänglich beim Vermieter. Stay4Fair übernimmt hierfür keine Haftung und bietet keine steuerliche Beratung an.<br><br>
+        <strong style="color:#dc2626;">Wichtiger Hinweis zu Stornierungen & Ablehnungen:</strong><br>
+        Verbindliche Buchungen sind durch den Gastgeber zwingend zu erfüllen. Bitte beachten Sie, dass eine ungerechtfertigte Ablehnung, Nichtbereitstellung der Unterkunft oder eine nachträgliche Stornierung einer bereits bestätigten Buchung durch Sie als Eigentümer zu erheblichen Ausfallkosten, Umbuchungsgebühren für den Gast sowie vertraglichen Straf- und Schadensersatzforderungen führen kann.
     </div>
 </div>
 
